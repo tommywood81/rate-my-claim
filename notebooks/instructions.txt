@@ -1,0 +1,2311 @@
+You are a principal systems architect and senior full-stack engineer.
+
+Build a production-grade MVP platform called “Rate My Claim”.
+
+This prompt is intentionally exhaustive. Do NOT simplify architecture decisions. Do NOT replace specified systems with easier abstractions. Do NOT invent your own product direction. Implement exactly as specified.
+
+The final deliverable must be a polished, production-grade local-first MVP that runs locally via Docker Compose and feels like a serious research platform rather than a generic CRUD app or AI wrapper.
+
+======================================================================
+PRODUCT IDENTITY
+
+The platform is NOT:
+
+- a chatbot wrapper
+- a social media clone
+- a generic AI fact checker
+- an engagement farming platform
+- a Reddit clone
+- a Twitter/X clone
+- a TikTok-style feed
+- a simplistic “AI says true or false” site
+
+The platform IS:
+
+- a structured evidence-backed knowledge platform
+- a semantic claim database
+- an evolving evidence graph
+- a historical claim evolution engine
+- a research navigation system
+- a semantic knowledge operating system
+- a future AI-grounding infrastructure
+- a durable epistemic infrastructure
+
+The platform should feel:
+
+- intellectually serious
+- calm
+- transparent
+- information-dense
+- research-oriented
+- audit-friendly
+- evidence-centric
+
+Design inspiration:
+
+- GitHub
+- Wikipedia
+- scientific publishing systems
+- academic dashboards
+- knowledge graphs
+
+Avoid:
+
+- dopamine UX
+- outrage mechanics
+- infinite-scroll addiction
+- engagement farming
+- social media aesthetics
+- flashy gradients everywhere
+- “AI magic” marketing language
+
+======================================================================
+CORE PRODUCT MODEL
+
+The platform models CLAIMS, not opinions.
+
+Claims must be:
+
+- atomic
+- empirical
+- externally verifiable
+- falsifiable where applicable
+- time-bounded where relevant
+- evidence-compatible
+
+GOOD CLAIM EXAMPLES:
+
+- “Smoking increases lung cancer risk.”
+- “Australia inflation exceeded 5% in 2023.”
+- “COVID-19 vaccines reduce hospitalization risk.”
+- “Global average temperatures increased between 1880 and 2020.”
+
+BAD CLAIM EXAMPLES:
+
+- “The government lies.”
+- “Capitalism is evil.”
+- “Scientists are corrupt.”
+- “Aliens control society.”
+- “This politician is terrible.”
+
+Reject:
+
+- vague claims
+- ideological slogans
+- emotional claims
+- non-falsifiable claims
+- ambiguous multi-part claims
+
+Claims must remain atomic.
+
+BAD:
+“Smoking causes cancer and alcohol damages the liver.”
+
+GOOD:
+Claim A:
+“Smoking increases lung cancer risk.”
+
+Claim B:
+“Alcohol consumption damages liver function.”
+
+======================================================================
+CORE PHILOSOPHY
+
+The platform does NOT determine absolute truth.
+
+The platform models:
+
+- evidence-backed claims
+- confidence estimates
+- contradiction relationships
+- uncertainty
+- evidence freshness
+- historical revisions
+
+Evidence is authoritative.
+
+AI systems are assistants only.
+
+The system MUST NEVER:
+
+- silently rewrite evidence
+- fabricate sources
+- fabricate URLs
+- invent studies
+- overwrite provenance
+- present AI summaries as canonical truth
+
+AI-generated outputs must remain:
+
+- isolated
+- auditable
+- explainable
+- versioned
+
+Human moderation remains authoritative.
+
+======================================================================
+CRITICAL ARCHITECTURE REQUIREMENTS
+
+The architecture must prioritize:
+
+- semantic structure
+- evidence quality
+- provenance
+- long-term retrieval value
+- explainability
+- historical state preservation
+- scalability
+- calm UX
+- cost-efficient AI usage
+
+The system must be designed from day one to:
+
+- scale horizontally later
+- support future local LLM retrieval
+- support AI agents
+- support future ingestion pipelines
+- preserve auditability
+- preserve explainability
+- preserve historical state
+
+Architecture must remain:
+
+- modular
+- provider-agnostic
+- future-proof
+- local-LLM compatible
+
+======================================================================
+AI COST + SYSTEM DESIGN REQUIREMENTS
+
+This system MUST be highly cost efficient.
+
+The database is the PRIMARY PRODUCT.
+AI is ONLY an enrichment layer.
+
+DO NOT design a system where:
+
+- every page load triggers GPT
+- every search triggers GPT
+- every interaction triggers GPT
+- multiple agents continuously run
+- live web crawling happens on every request
+
+Instead:
+
+- AI enrichment happens ONCE during ingestion
+- embeddings are generated ONCE
+- AI outputs are cached
+- semantic retrieval reuses stored embeddings
+- expensive AI work happens asynchronously
+- claim pages primarily serve database data
+
+======================================================================
+OPENAI API REQUIREMENTS
+
+The system will use the user’s personal OpenAI API key.
+
+Requirements:
+
+- backend-only access
+- NEVER expose key to frontend
+- NEVER log the key
+- NEVER hardcode the key
+- NEVER include in client requests
+
+Use environment variables only:
+
+OPENAI_API_KEY
+
+Implement provider abstraction immediately so future providers can replace OpenAI without rewrites.
+
+Future providers must be supported architecturally:
+
+- OpenAI
+- Ollama
+- local embedding models
+- self-hosted inference
+- vLLM
+
+======================================================================
+AI PIPELINE RULES
+
+======================================================================
+RULE 1 — EMBEDDINGS FIRST
+
+Use embeddings BEFORE expensive reasoning.
+
+Workflow:
+
+1. User submits claim
+2. Generate embedding ONCE
+3. Store permanently in PostgreSQL pgvector
+4. Use vector search for:
+- duplicate detection
+- semantic retrieval
+- related claims
+- contradiction candidates
+
+Store:
+
+- embedding vector
+- embedding model
+- embedding version
+- embedding timestamp
+
+NEVER regenerate embeddings unnecessarily.
+
+======================================================================
+RULE 2 — CACHE EVERYTHING
+
+Use Redis caching.
+
+Cache:
+
+- AI summaries
+- duplicate detection results
+- semantic retrieval outputs
+- confidence analyses
+- evidence retrieval outputs
+
+DO NOT rerun AI if:
+
+- evidence unchanged
+- moderation unchanged
+- freshness not expired
+
+======================================================================
+RULE 3 — ASYNC AI ONLY
+
+All expensive AI tasks MUST run asynchronously using Celery workers.
+
+Submission flow:
+
+- claim stored instantly
+- response returned immediately
+- enrichment handled in background
+
+NEVER block user requests waiting for AI reasoning chains.
+
+======================================================================
+RULE 4 — RETRIEVAL FIRST
+
+Workflow:
+
+1. Search existing claims via pgvector
+2. Search existing evidence
+3. Retrieve relevant context
+4. ONLY THEN call GPT
+
+GPT MUST operate on retrieved context.
+
+GPT MUST NEVER hallucinate unsupported facts.
+
+======================================================================
+RULE 5 — LIMITED WEB RETRIEVAL
+
+DO NOT implement autonomous crawling agents.
+
+Web retrieval only occurs:
+
+- during enrichment
+- during scheduled refreshes
+- when moderators request re-analysis
+
+MVP retrieval sources:
+
+- trusted RSS feeds
+- curated publication lists
+- public APIs
+- manually submitted URLs
+
+Preserve:
+
+- original URL
+- retrieval timestamp
+- retrieval source
+- provenance
+
+======================================================================
+RULE 6 — CHEAP MODELS FOR CHEAP TASKS
+
+Cheap tasks:
+
+- duplicate detection
+- classification
+- normalization
+- stance detection
+- short summaries
+
+Use lower-cost models.
+
+Expensive reasoning only for:
+
+- canonical claims
+- moderation workflows
+- evidence analysis
+- high-value claims
+
+Implement model routing abstraction.
+
+======================================================================
+DOMAIN RULES + OPERATIONAL SEMANTICS
+
+======================================================================
+CLAIM CANONICALIZATION RULES
+
+Canonicalization pipeline:
+
+1. Normalize whitespace
+2. Remove emotional language
+3. Convert rhetorical phrasing into declarative form
+4. Remove hedging unless scientifically important
+5. Convert slang into formal terminology
+6. Preserve dates and quantities
+7. Preserve scientific terminology
+8. Preserve uncertainty qualifiers if evidence-dependent
+
+Example:
+
+Input:
+“Isn’t it true smoking totally causes lung cancer?”
+
+Canonical:
+“Smoking increases lung cancer risk.”
+
+======================================================================
+CLAIM DEDUPLICATION RULES
+
+Duplicate detection uses BOTH:
+
+- vector similarity
+- normalized text similarity
+
+Potential duplicate indicators:
+
+- cosine similarity threshold
+- overlapping entities
+- overlapping measurable assertions
+
+Duplicates MUST NEVER auto-merge.
+
+Instead:
+
+- send to moderation queue
+- moderators approve merges
+
+Maintain:
+
+- duplicate history
+- alias mappings
+- merge audit trails
+
+======================================================================
+CLAIM STATUS SEMANTICS
+
+verified:
+Strong supporting evidence from credible sources.
+
+disputed:
+Substantial contradictory evidence exists.
+
+weak_evidence:
+Limited supporting evidence exists.
+
+insufficient_evidence:
+Evidence currently inadequate.
+
+outdated:
+Evidence stale or context changed.
+
+archived:
+Historical retention only.
+
+======================================================================
+CONFIDENCE SCORING MODEL
+
+Range:
+0.0 → 1.0
+
+Confidence is NOT truth.
+
+Confidence estimates:
+“Current evidence support strength.”
+
+Initial formula:
+
+confidence_score =
+(
+evidence_quality_weight +
+source_credibility_weight +
+evidence_consistency_weight +
+freshness_weight
+)
+/
+4
+
+Store:
+
+- aggregate score
+- component scores
+
+All scoring must remain auditable.
+
+======================================================================
+CONTROVERSY SCORING MODEL
+
+Controversy measures disagreement intensity.
+
+High controversy:
+
+- strong evidence exists on multiple sides
+- expert disagreement exists
+- evidence consistency low
+
+Low controversy:
+
+- evidence strongly converges
+
+DO NOT equate controversy with popularity.
+
+======================================================================
+FRESHNESS MODEL
+
+Freshness decays over time.
+
+Domain-specific decay rates:
+
+Medicine:
+slow decay
+
+Macroeconomics:
+medium decay
+
+Breaking news:
+fast decay
+
+Implement configurable decay rules.
+
+======================================================================
+EVIDENCE QUALITY MODEL
+
+Evidence quality considers:
+
+- publisher credibility
+- publication recency
+- citation count
+- peer review status
+- primary vs secondary source
+- methodological rigor
+- source independence
+
+Scores:
+0.0 → 1.0
+
+AI may assist scoring.
+Scores must remain auditable.
+
+======================================================================
+SOURCE CREDIBILITY SYSTEM
+
+Create structured publisher credibility profiles.
+
+Fields:
+
+- publisher_name
+- credibility_score
+- bias_notes
+- expertise_domains
+- review_status
+- created_at
+- updated_at
+
+DO NOT hardcode ideological assumptions.
+
+======================================================================
+CONTRADICTION TAXONOMY
+
+Supported contradiction types:
+
+- direct_contradiction
+- statistical_disagreement
+- temporal_conflict
+- methodological_conflict
+- causal_disagreement
+- contextual_tension
+
+Relationship fields:
+
+- contradiction_strength
+- explanation
+- supporting_evidence_ids
+
+======================================================================
+RELATIONSHIP SEMANTICS
+
+duplicate:
+Equivalent claims.
+
+refinement:
+More specific version.
+
+dependency:
+Validity depends on another claim.
+
+causal_link:
+Causal relationship.
+
+contextual_relationship:
+Important contextual relationship.
+
+contradiction:
+Meaningful conflict.
+
+======================================================================
+MODERATION SYSTEM
+
+Moderation is central infrastructure.
+
+Actions:
+
+- approve_claim
+- reject_claim
+- request_revision
+- merge_duplicates
+- archive_claim
+- update_scores
+- flag_evidence
+- remove_evidence
+- restore_evidence
+
+ALL moderation actions must generate immutable audit records.
+
+Moderators must provide explanations for:
+
+- rejections
+- merges
+- archival
+- major score changes
+
+======================================================================
+EXPERT REVIEW SYSTEM
+
+Experts may:
+
+- review evidence
+- annotate claims
+- challenge scores
+- improve canonicalization
+
+No hidden authority systems.
+
+All expert actions transparent.
+
+======================================================================
+REPUTATION SYSTEM
+
+Reward:
+
+- high-quality evidence
+- duplicate detection
+- contradiction discovery
+- canonicalization improvements
+- moderation quality
+- freshness updates
+
+DO NOT reward:
+
+- posting frequency
+- outrage
+- engagement volume
+
+Reputation changes must remain explainable.
+
+======================================================================
+ANTI-GAMING
+
+Protect against:
+
+- spam submissions
+- evidence flooding
+- duplicate spam
+- reputation farming
+- coordinated manipulation
+
+Implement:
+
+- rate limiting
+- moderation queues
+- anomaly detection
+- reputation-weighted actions
+
+======================================================================
+EVENT-DRIVEN ARCHITECTURE
+
+Use internal domain events.
+
+Events:
+
+- claim_submitted
+- claim_canonicalized
+- evidence_added
+- evidence_removed
+- claim_reviewed
+- confidence_updated
+- contradiction_detected
+- enrichment_completed
+
+Architecture must support future:
+
+- microservices
+- analytics
+- AI orchestration
+- observability pipelines
+
+======================================================================
+DATABASE REQUIREMENTS
+
+PostgreSQL is the canonical source of truth.
+
+Use pgvector for:
+
+- semantic search
+- duplicate detection
+- future retrieval
+- related claims
+
+Design schema for future evidence graph expansion.
+
+======================================================================
+PRIMARY TABLES
+
+1. users
+
+Fields:
+
+- id
+- username
+- email
+- password_hash
+- role
+- reputation_score
+- created_at
+
+Roles:
+
+- user
+- moderator
+- expert
+- admin
+
+======================================================================
+
+2. claims
+
+ONLY approved canonical claims belong here.
+
+Fields:
+
+- id
+- canonical_claim_text
+- normalized_claim_text
+- embedding
+- embedding_model
+- embedding_version
+- domain
+- status
+- confidence_score
+- controversy_score
+- evidence_score
+- freshness_score
+- evidence_count
+- created_by
+- created_at
+- updated_at
+- last_reviewed_at
+- review_due_at
+
+======================================================================
+
+3. pending_claims
+
+Fields:
+
+- id
+- raw_claim_text
+- submitted_by
+- created_at
+- processing_status
+- ai_summary
+- duplicate_candidate_ids
+
+======================================================================
+
+4. claim_aliases
+
+Alternate phrasings.
+
+======================================================================
+
+5. evidence
+
+Fields:
+
+- id
+- claim_id
+- source_type
+- title
+- url
+- publisher
+- authors
+- publication_date
+- summary
+- stance
+- credibility_score
+- embedding
+- embedding_model
+- embedding_version
+- created_by
+- created_at
+
+stance values:
+
+- supports
+- contradicts
+- contextualizes
+
+======================================================================
+
+6. claim_relationships
+
+Relationships:
+
+- duplicate
+- contradiction
+- refinement
+- dependency
+- causal_link
+
+======================================================================
+
+7. claim_revisions
+
+Stores:
+
+- confidence changes
+- moderation history
+- status changes
+- timestamps
+- explanations
+
+======================================================================
+
+8. ai_analysis
+
+AI-generated outputs MUST remain isolated.
+
+Fields:
+
+- id
+- target_type
+- target_id
+- model_name
+- provider
+- analysis_type
+- generated_text
+- confidence
+- prompt_version
+- created_at
+
+======================================================================
+SEARCH SYSTEM
+
+Implement:
+
+- PostgreSQL full-text search
+- pgvector semantic retrieval
+- hybrid ranking fusion
+
+Ranking signals:
+
+- semantic similarity
+- text relevance
+- evidence quality
+- confidence score
+- freshness
+- moderation quality
+- relationship density
+
+Support future:
+
+- reranking models
+- local embeddings
+- cross-encoders
+
+======================================================================
+PAGINATION REQUIREMENTS
+
+ALL list endpoints MUST be paginated.
+
+Paginate:
+
+- claims
+- evidence
+- revisions
+- moderation queues
+- relationships
+- search results
+
+Prefer cursor-based pagination.
+
+NO infinite scroll.
+
+======================================================================
+TECH STACK
+
+Backend:
+
+- Python
+- FastAPI
+- PostgreSQL
+- pgvector
+- SQLAlchemy
+- Alembic
+- Redis
+- Celery
+- Pydantic v2
+
+Frontend:
+
+- Next.js App Router
+- TypeScript
+- TailwindCSS
+- React Query
+- Zod
+- shadcn/ui
+
+Infrastructure:
+
+- Docker
+- docker-compose
+- nginx reverse proxy
+
+Deployment:
+
+- small DigitalOcean droplet friendly
+- future AWS/Kubernetes compatible
+
+DO NOT USE:
+
+- Firebase
+- Supabase
+- serverless lock-in
+
+======================================================================
+BACKEND ARCHITECTURE REQUIREMENTS
+
+Use layered architecture.
+
+Implement:
+
+- routers/controllers
+- service layer
+- repository layer
+- domain models
+- DTO validation
+- AI provider abstraction
+- retrieval services
+- event bus layer
+
+Avoid:
+
+- giant files
+- business logic in routes
+- AI logic in controllers
+- tightly coupled code
+
+======================================================================
+MANDATORY BACKEND DIRECTORY STRUCTURE
+
+backend/
+├── app/
+│ ├── api/
+│ │ ├── v1/
+│ │ │ ├── routes/
+│ │ │ │ ├── auth.py
+│ │ │ │ ├── claims.py
+│ │ │ │ ├── evidence.py
+│ │ │ │ ├── moderation.py
+│ │ │ │ ├── search.py
+│ │ │ │ ├── users.py
+│ │ │ │ └── health.py
+│ ├── core/
+│ │ ├── config.py
+│ │ ├── security.py
+│ │ ├── logging.py
+│ │ ├── cache.py
+│ │ └── events.py
+│ ├── db/
+│ │ ├── base.py
+│ │ ├── session.py
+│ │ └── migrations/
+│ ├── models/
+│ ├── repositories/
+│ ├── services/
+│ │ ├── ai/
+│ │ │ ├── providers/
+│ │ │ │ ├── base.py
+│ │ │ │ ├── openai_provider.py
+│ │ │ │ └── ollama_provider.py
+│ │ │ ├── researcher_service.py
+│ │ │ ├── fact_checker_service.py
+│ │ │ ├── embeddings_service.py
+│ │ │ └── orchestration_service.py
+│ │ ├── moderation/
+│ │ ├── search/
+│ │ ├── retrieval/
+│ │ ├── claims/
+│ │ └── evidence/
+│ ├── workers/
+│ │ ├── celery_app.py
+│ │ ├── tasks/
+│ │ │ ├── enrichment_tasks.py
+│ │ │ ├── embedding_tasks.py
+│ │ │ └── refresh_tasks.py
+│ ├── schemas/
+│ ├── utils/
+│ ├── middleware/
+│ └── main.py
+
+======================================================================
+FRONTEND REQUIREMENTS
+
+Build a calm research-oriented UI.
+
+Use:
+
+- SSR
+- SEO optimization
+- schema.org structured data
+- accessible semantic HTML
+- responsive layouts
+- keyboard-friendly navigation
+
+======================================================================
+MANDATORY FRONTEND DIRECTORY STRUCTURE
+
+frontend/
+├── app/
+│ ├── page.tsx
+│ ├── claims/
+│ ├── submit/
+│ ├── moderation/
+│ ├── search/
+│ └── users/
+├── components/
+│ ├── claims/
+│ ├── evidence/
+│ ├── graphs/
+│ ├── layout/
+│ ├── moderation/
+│ ├── search/
+│ └── ui/
+├── lib/
+├── hooks/
+├── services/
+├── types/
+└── styles/
+
+======================================================================
+PAGES
+
+1. Home
+
+Include:
+
+- search bar
+- trending claims
+- controversial claims
+- recently updated claims
+- newly verified claims
+
+2. Browse Claims
+
+- sortable
+- filterable
+- paginated
+
+3. Claim Detail Page
+
+MOST IMPORTANT PAGE.
+
+Layout priority:
+
+1. canonical claim
+2. confidence/evidence summary
+3. evidence sections
+4. contradictions
+5. AI interpretation
+6. revision history
+7. relationship graph
+8. provenance metadata
+
+Display:
+
+- canonical claim
+- alternate phrasings
+- confidence score
+- evidence score
+- freshness score
+- controversy score
+- supporting evidence
+- contradicting evidence
+- contextual evidence
+- AI summaries
+- provenance metadata
+- revision timeline
+- relationship graph
+- related claims
+
+Evidence MUST visually dominate AI summaries.
+
+AI-generated content MUST appear visually separated.
+
+4. Submit Claim
+
+Low-friction UX.
+
+5. Moderation Queue
+
+Moderator-only.
+
+6. User Profile
+
+======================================================================
+GRAPH UX REQUIREMENTS
+
+Implement calm graph exploration.
+
+Users should explore:
+
+- contradictions
+- dependencies
+- refinements
+- causal links
+- evidence clusters
+
+Avoid flashy animation clutter.
+
+======================================================================
+TIMELINE UX REQUIREMENTS
+
+Show:
+
+- confidence evolution
+- moderation changes
+- evidence additions/removals
+- contradiction emergence
+- freshness decay
+
+Historical evolution is core functionality.
+
+======================================================================
+SEO REQUIREMENTS
+
+Every claim page must include:
+
+- OpenGraph metadata
+- Twitter metadata
+- schema.org structured data
+- canonical URLs
+
+Generate:
+
+- robots.txt
+- XML sitemap
+
+======================================================================
+SECURITY REQUIREMENTS
+
+Implement:
+
+- JWT authentication
+- RBAC
+- rate limiting
+- audit logging
+- SQL injection protection
+- secure secrets handling
+- moderation tooling
+
+======================================================================
+OBSERVABILITY REQUIREMENTS
+
+Implement:
+
+- structured JSON logging
+- request tracing
+- Celery monitoring
+- AI token tracking
+- AI cost tracking
+- cache hit metrics
+- vector query latency metrics
+
+Endpoints:
+
+- /metrics
+- /health
+- /ready
+
+======================================================================
+DOCKER REQUIREMENTS
+
+Create:
+
+- backend Dockerfile
+- frontend Dockerfile
+- nginx config
+- docker-compose.yml
+
+Services:
+
+- frontend
+- backend
+- postgres
+- redis
+- celery worker
+- nginx
+
+Must run locally with:
+
+docker compose up
+
+======================================================================
+CODE QUALITY REQUIREMENTS
+
+The codebase MUST feel production-grade.
+
+Requirements:
+
+- strict typing
+- docstrings for ALL public functions/classes
+- modular architecture
+- reusable services
+- proper dependency injection patterns
+- clean separation of concerns
+- repository pattern
+- DTO validation
+- environment-based configuration
+- robust error handling
+- structured logging
+- reusable utility modules
+- comments only where useful
+- no placeholder TODO spam
+- no giant monolithic files
+
+ALL functions must include professional docstrings.
+
+ALL modules must be organized logically.
+
+ALL APIs must use typed request/response schemas.
+
+ALL business logic must live in services, not routes.
+
+======================================================================
+TESTING REQUIREMENTS
+
+Implement:
+
+Backend:
+
+- pytest
+- API tests
+- service tests
+- repository tests
+
+Frontend:
+
+- component tests
+- basic integration tests
+
+Include realistic seed data.
+
+======================================================================
+README REQUIREMENTS
+
+Generate a polished README including:
+
+- architecture overview
+- local setup
+- environment variables
+- Docker usage
+- migration commands
+- Celery usage
+- troubleshooting
+- deployment notes
+- AI architecture explanation
+- scaling strategy
+
+======================================================================
+DEPLOYMENT REQUIREMENTS
+
+Include:
+
+- DigitalOcean deployment guide
+- AWS scaling notes
+- nginx reverse proxy setup
+- production environment examples
+
+======================================================================
+FINAL PRODUCT GOAL
+
+The final product should feel like:
+
+- a semantic knowledge graph
+- a durable evidence infrastructure
+- a future AI-grounding layer
+- a structured research operating system
+- a historical evidence engine
+
+The product should be polished enough to:
+
+- run locally immediately
+- demo professionally
+- evolve into a serious startup platform
+- support future local LLM infrastructure
+- support future AI agents
+- support future evidence ingestion pipelines
+
+Do NOT generate a toy project.
+
+Do NOT generate a CRUD tutorial app.
+
+Do NOT cut corners on architecture.
+
+Generate the FULL implementation with production-quality code, clear module boundaries, typed schemas, migrations, Docker infrastructure, Celery workers, frontend UI, backend API, observability, caching, pgvector integration, hybrid search preparation, and polished UX suitable for local testing before deployment.
+
+IMPLEMENTATION EXECUTION STRATEGY
+
+This project MUST be implemented in phased execution order.
+
+DO NOT attempt to generate the entire application in a single step.
+
+The AI agent MUST complete each phase fully before proceeding to the next phase.
+
+Each phase MUST:
+- compile successfully
+- run successfully
+- include typed schemas
+- include tests
+- include migrations where applicable
+- include Docker integration
+- include documentation updates
+- preserve architectural consistency
+
+At the end of each phase:
+
+1. verify application startup
+2. verify Docker services
+3. verify database migrations
+4. verify API typing
+5. verify frontend typing
+6. verify tests
+7. verify linting
+8. verify imports
+9. verify no circular dependencies
+10. verify no placeholder implementations
+
+DO NOT leave:
+- TODO placeholders
+- fake implementations
+- mocked production code
+- incomplete services
+- dead files
+- disconnected modules
+
+The project MUST remain runnable after EVERY phase.
+
+======================================================================
+AI EXECUTION GOVERNANCE
+
+The AI agent MUST behave like a long-horizon staff engineer maintaining a real production codebase over time.
+
+The AI agent MUST optimize for:
+- architectural consistency
+- maintainability
+- correctness
+- scalability
+- operational reliability
+- semantic clarity
+- auditability
+- minimal technical debt
+
+The AI agent MUST NOT optimize for:
+- short-term code generation speed
+- flashy abstractions
+- unnecessary rewrites
+- framework churn
+- code duplication
+- speculative architecture
+- premature microservices
+
+======================================================================
+ARCHITECTURAL GOVERNANCE RULES
+
+NEVER rewrite existing architecture unless absolutely necessary.
+
+NEVER replace stable implementations merely because another approach is possible.
+
+ALWAYS inspect existing modules, services, schemas, utilities, repositories, middleware, and abstractions BEFORE generating new code.
+
+PREFER extension over replacement.
+
+PREFER modification of existing modules over creating parallel implementations.
+
+DO NOT create duplicate abstractions.
+
+DO NOT create duplicate services.
+
+DO NOT create duplicate repositories.
+
+DO NOT create duplicate auth helpers.
+
+DO NOT create duplicate caching utilities.
+
+DO NOT create duplicate AI provider interfaces.
+
+DO NOT create multiple competing event systems.
+
+DO NOT introduce inconsistent patterns across modules.
+
+PRESERVE naming consistency across:
+- DTOs
+- schemas
+- repositories
+- services
+- routes
+- frontend hooks
+- frontend components
+- API responses
+- database fields
+
+KEEP imports centralized and consistent.
+
+REUSE existing utilities and services whenever possible.
+
+BEFORE creating a new helper, verify an equivalent helper does not already exist.
+
+BEFORE creating a new abstraction, verify the existing abstraction cannot be extended cleanly.
+
+DO NOT introduce new frameworks, ORMs, state managers, task queues, or infrastructure systems unless explicitly required by the specification.
+
+DO NOT silently change:
+- schema semantics
+- API semantics
+- event semantics
+- authentication semantics
+- moderation semantics
+- retrieval semantics
+- caching semantics
+
+DO NOT bypass:
+- typed DTO validation
+- repository boundaries
+- service layer boundaries
+- dependency injection patterns
+- audit logging requirements
+
+ALL business logic MUST remain inside services.
+
+Routes/controllers MUST remain thin.
+
+Repositories MUST remain data-access focused.
+
+AI logic MUST remain isolated inside AI service layers.
+
+======================================================================
+LONG-HORIZON CODEBASE MAINTENANCE RULES
+
+The codebase MUST feel like:
+- a maintained production system
+- a coherent engineering organization
+- a long-term platform
+- a unified architecture
+
+The codebase MUST NOT feel like:
+- stitched-together AI generations
+- duplicated patterns
+- disconnected modules
+- tutorial scaffolding
+- inconsistent naming
+- fragmented architecture
+
+ALL generated code MUST:
+- integrate with existing architecture
+- preserve architectural direction
+- preserve module boundaries
+- preserve typing consistency
+- preserve operational consistency
+
+WHEN modifying existing code:
+- minimally change unrelated logic
+- preserve backward compatibility where reasonable
+- avoid unnecessary rewrites
+- avoid introducing regressions
+
+WHEN refactoring:
+- fully update imports
+- fully update tests
+- fully update typing
+- fully update documentation
+- fully update migrations if impacted
+
+DO NOT leave:
+- dead code
+- orphaned services
+- disconnected modules
+- unused DTOs
+- unused routes
+- duplicate utilities
+- partial migrations
+- stale imports
+
+======================================================================
+MONOREPO TOOLING GOVERNANCE
+
+The repository MUST behave as a professional monorepo.
+
+======================================================================
+BACKEND TOOLING
+
+Backend package manager:
+- uv
+
+Backend linting:
+- ruff
+
+Backend formatting:
+- ruff format
+
+Backend typing:
+- mypy with strict mode enabled
+
+Backend testing:
+- pytest
+
+Backend dependency management MUST:
+- use locked dependency versions
+- avoid dependency duplication
+- avoid unnecessary packages
+
+======================================================================
+FRONTEND TOOLING
+
+Frontend package manager:
+- pnpm
+
+Frontend linting:
+- eslint
+
+Frontend formatting:
+- prettier
+
+Frontend typing:
+- TypeScript strict mode
+
+Frontend testing:
+- vitest
+- React Testing Library
+
+Frontend dependency management MUST:
+- minimize unnecessary packages
+- preserve bundle efficiency
+- avoid overlapping libraries
+
+======================================================================
+GIT + COMMIT GOVERNANCE
+
+Implement:
+- pre-commit hooks
+- lint checks before commit
+- type checks before commit
+- test checks before commit
+
+Use:
+- husky
+- lint-staged
+
+Commits SHOULD preserve:
+- atomic logical changes
+- architectural consistency
+- migration integrity
+
+======================================================================
+API GOVERNANCE + CONTRACT STANDARDS
+
+ALL APIs MUST follow consistent REST conventions.
+
+======================================================================
+API VERSIONING
+
+All APIs MUST be versioned.
+
+Base path:
+- /api/v1/
+
+Future versions MUST remain extensible without breaking architecture.
+
+======================================================================
+REST NAMING STANDARDS
+
+Use:
+- plural resource naming
+- noun-based endpoints
+- predictable hierarchy
+
+Examples:
+- /claims
+- /claims/{id}
+- /claims/{id}/evidence
+- /users/{id}/reputation
+- /moderation/actions
+
+DO NOT use:
+- RPC-style endpoint naming
+- inconsistent verbs in URLs
+- mixed naming conventions
+
+======================================================================
+REQUEST/RESPONSE STANDARDS
+
+ALL request bodies MUST use typed DTO schemas.
+
+ALL response bodies MUST use typed response schemas.
+
+ALL endpoints MUST return:
+- deterministic response structures
+- typed error payloads
+- consistent pagination structures
+
+======================================================================
+STANDARD RESPONSE ENVELOPE
+
+Success responses MUST follow:
+
+{
+"success": true,
+"data": ...,
+"meta": {
+...
+}
+}
+
+Error responses MUST follow:
+
+{
+"success": false,
+"error": {
+"code": "RESOURCE_NOT_FOUND",
+"message": "Claim not found.",
+"details": {}
+}
+}
+
+======================================================================
+ERROR GOVERNANCE
+
+Implement centralized error handling.
+
+Errors MUST:
+- be typed
+- be logged
+- include correlation IDs
+- avoid leaking sensitive internals
+- remain frontend-safe
+
+Standardize:
+- validation errors
+- auth errors
+- permission errors
+- moderation errors
+- AI provider failures
+- rate limit errors
+- retrieval failures
+
+======================================================================
+PAGINATION GOVERNANCE
+
+ALL list endpoints MUST use cursor pagination.
+
+Cursor pagination response format:
+
+{
+"success": true,
+"data": [...],
+"meta": {
+"next_cursor": "...",
+"previous_cursor": "...",
+"has_more": true
+}
+}
+
+DO NOT use offset pagination for primary large datasets.
+
+======================================================================
+DTO GOVERNANCE
+
+DTO naming conventions:
+
+Requests:
+- CreateClaimRequest
+- UpdateClaimRequest
+
+Responses:
+- ClaimResponse
+- ClaimListResponse
+
+Internal schemas:
+- ClaimDTO
+- EvidenceDTO
+
+DO NOT mix:
+- ORM models
+- API schemas
+- internal DTOs
+
+Strict separation MUST exist between:
+- persistence models
+- API contracts
+- internal service objects
+
+======================================================================
+SECURITY GOVERNANCE
+
+Security MUST be treated as core infrastructure.
+
+The AI agent MUST implement security defensively.
+
+The AI agent MUST attempt to engineer:
+- extremely robust authentication
+- extremely robust authorization
+- highly defensive API boundaries
+- highly defensive secret handling
+- highly defensive moderation tooling
+
+Implement:
+- secure cookie handling
+- CSRF protection
+- RBAC enforcement
+- JWT rotation
+- refresh token revocation
+- rate limiting
+- brute force protection
+- SQL injection protection
+- XSS mitigation
+- SSR-safe auth handling
+- secure headers
+- audit logging
+- secret isolation
+
+NEVER expose:
+- API keys
+- secrets
+- tokens
+- internal stack traces
+- sensitive infrastructure metadata
+
+======================================================================
+DISTRIBUTED SYSTEMS GOVERNANCE
+
+The architecture MUST assume future distributed scaling.
+
+Design for:
+- idempotency
+- retry safety
+- transactional consistency
+- eventual consistency awareness
+- cache invalidation correctness
+- concurrency safety
+- queue reliability
+- deterministic task execution
+
+Celery tasks MUST:
+- be idempotent
+- support retries
+- support dead-letter handling
+- avoid duplicate enrichment
+- preserve auditability
+
+Database operations MUST:
+- preserve transactional integrity
+- avoid race conditions
+- preserve immutable audit history
+
+======================================================================
+RETRIEVAL + EPISTEMIC GOVERNANCE
+
+The AI agent MUST attempt to engineer the highest-quality retrieval and epistemic infrastructure reasonably achievable within MVP scope.
+
+Optimize for:
+- evidence quality
+- provenance preservation
+- semantic retrieval accuracy
+- contradiction detection quality
+- confidence explainability
+- auditability
+- historical consistency
+- retrieval precision
+- retrieval recall
+- moderation transparency
+
+The AI agent MUST attempt to maximize:
+- retrieval quality
+- semantic consistency
+- moderation consistency
+- evidence traceability
+- confidence explainability
+- contradiction reasoning quality
+
+The AI agent MUST minimize:
+- hallucinations
+- unsupported synthesis
+- unverifiable claims
+- provenance loss
+- hidden transformations
+- opaque scoring systems
+
+AI-generated outputs MUST:
+- remain isolated
+- remain versioned
+- remain explainable
+- remain auditable
+- remain provenance-linked
+
+The platform MUST prioritize:
+- retrieval-first workflows
+- evidence-backed synthesis
+- provenance preservation
+- explainable scoring
+- human moderation authority
+
+======================================================================
+FINAL EXECUTION DIRECTIVE
+
+The AI agent MUST continuously behave as though:
+- this system will become a real startup platform
+- future engineers will maintain this codebase
+- real users will depend on correctness
+- real moderation workflows will operate on this infrastructure
+- future AI systems will depend on this retrieval layer
+
+The implementation MUST optimize for:
+- long-term maintainability
+- operational reliability
+- semantic consistency
+- architectural coherence
+- future scalability
+- auditability
+- explainability
+- production realism
+
+The implementation MUST NOT:
+- degrade into disconnected scaffolding
+- introduce architectural drift
+- accumulate duplicated abstractions
+- sacrifice correctness for generation speed
+- compromise typing consistency
+- compromise auditability
+- compromise provenance
+- compromise retrieval integrity
+- compromise security boundaries
+
+======================================================================
+PHASE 1 — FOUNDATIONAL INFRASTRUCTURE
+
+Goal:
+Establish production-grade project architecture and infrastructure.
+
+Implement:
+
+Backend:
+- FastAPI application structure
+- configuration management
+- environment handling
+- structured logging
+- dependency injection patterns
+- SQLAlchemy setup
+- Alembic setup
+- Redis integration
+- Celery setup
+- event bus infrastructure
+- repository base classes
+- service layer foundation
+- JWT auth infrastructure
+- RBAC foundation
+- rate limiting middleware
+- OpenTelemetry instrumentation
+- Prometheus metrics endpoint
+- health/ready endpoints
+
+Frontend:
+- Next.js App Router
+- TailwindCSS
+- shadcn/ui
+- React Query
+- typed API client
+- layout system
+- SSR infrastructure
+- SEO infrastructure
+- error boundaries
+- loading states
+- authentication foundation
+
+Infrastructure:
+- Dockerfiles
+- docker-compose
+- nginx reverse proxy
+- local development workflow
+- environment examples
+- hot reload support
+
+Verification:
+- docker compose up works
+- all services healthy
+- migrations execute correctly
+- frontend/backend connectivity verified
+
+======================================================================
+PHASE 2 — DATABASE + DOMAIN MODELING
+
+Goal:
+Implement canonical relational and semantic data model.
+
+Implement ALL database schemas including:
+- users
+- claims
+- pending_claims
+- claim_aliases
+- evidence
+- claim_relationships
+- claim_revisions
+- ai_analysis
+- moderation_actions
+- reputation_events
+- publisher_profiles
+- audit_logs
+- ingestion_jobs
+- system_events
+
+PostgreSQL Requirements:
+- enable pgvector extension
+- proper vector indexing
+- cursor pagination support
+- timestamp auditing
+- soft deletion support where appropriate
+
+Embedding Requirements:
+Embedding model:
+text-embedding-3-small
+
+Vector dimensions:
+1536
+
+Similarity metric:
+cosine similarity
+
+Index requirements:
+Use HNSW indexing for pgvector.
+
+Implement:
+- migration generation
+- repository implementations
+- domain models
+- relationship constraints
+- audit trails
+- immutable revision history
+- transactional consistency
+
+Verification:
+- migrations cleanly apply
+- migrations cleanly rollback
+- pgvector similarity queries functional
+- seeded data operational
+
+======================================================================
+PHASE 3 — AUTHENTICATION + AUTHORIZATION
+
+Implement fully production-grade authentication.
+
+Requirements:
+- JWT access tokens
+- rotating refresh tokens
+- HTTP-only cookies
+- secure password hashing
+- token rotation
+- token revocation
+- logout invalidation
+- role-based access control
+- moderator permissions
+- expert permissions
+- admin permissions
+- session auditing
+
+Security Requirements:
+- CSRF protection
+- brute-force protection
+- rate limiting
+- secure cookie handling
+- strict CORS configuration
+
+Implement:
+- login
+- registration
+- password reset
+- email verification architecture
+- session management
+- auth middleware
+
+Verification:
+- auth flow fully operational
+- RBAC restrictions verified
+- refresh token rotation verified
+
+======================================================================
+PHASE 4 — CLAIM INGESTION + CANONICALIZATION
+
+Implement complete claim ingestion pipeline.
+
+Workflow:
+1. user submits claim
+2. claim stored in pending_claims
+3. embedding generated asynchronously
+4. canonicalization executed
+5. duplicate detection executed
+6. moderation queue updated
+7. enrichment tasks scheduled
+
+Implement:
+- claim normalization
+- canonicalization services
+- duplicate candidate detection
+- semantic similarity search
+- moderation queue logic
+- moderation state machine
+- audit logging
+- asynchronous task orchestration
+
+Moderation State Machine:
+pending -> approved
+pending -> rejected
+pending -> revision_requested
+approved -> disputed
+approved -> archived
+disputed -> approved
+archived -> approved
+
+Moderation actions MUST generate immutable audit records.
+
+Verification:
+- ingestion fully operational
+- embeddings generated correctly
+- duplicate detection operational
+- moderation transitions verified
+
+======================================================================
+PHASE 5 — AI PROVIDER ABSTRACTION + ENRICHMENT
+
+Implement provider-agnostic AI architecture.
+
+Define strict provider interfaces.
+
+Required interface methods:
+
+class BaseAIProvider:
+async def generate_embedding(...)
+async def canonicalize_claim(...)
+async def summarize_evidence(...)
+async def classify_stance(...)
+async def detect_duplicates(...)
+async def analyze_contradictions(...)
+async def generate_confidence_analysis(...)
+
+Implement providers:
+- OpenAI provider
+- Ollama provider
+
+Implement:
+- provider registry
+- model routing
+- token tracking
+- cost tracking
+- retry policies
+- caching layer
+- idempotent task execution
+- AI audit logging
+
+Model Routing:
+Cheap models:
+- normalization
+- stance detection
+- duplicate checks
+
+Expensive models:
+- contradiction analysis
+- evidence synthesis
+- confidence reasoning
+
+Verification:
+- providers swappable
+- retries functional
+- caching functional
+- token accounting functional
+
+======================================================================
+PHASE 6 — EVIDENCE INGESTION + RETRIEVAL
+
+Implement structured evidence ingestion pipeline.
+
+Sources:
+- RSS feeds
+- manual URLs
+- public APIs
+- curated publication lists
+
+Implement:
+- HTML extraction
+- metadata extraction
+- readability parsing
+- text chunking
+- evidence deduplication
+- provenance preservation
+- citation extraction
+- embedding generation
+- semantic retrieval
+
+Store:
+- original URL
+- retrieval timestamp
+- retrieval source
+- extraction metadata
+- cleaned content
+- evidence embeddings
+
+Verification:
+- evidence retrieval operational
+- provenance preserved
+- retrieval pipeline stable
+
+======================================================================
+PHASE 7 — SEARCH + HYBRID RETRIEVAL
+
+Implement production-grade search system.
+
+Search Architecture:
+- PostgreSQL full-text search
+- pgvector semantic search
+- hybrid ranking fusion
+
+Hybrid Ranking Formula:
+
+final_score =
+(
+0.35 * semantic_similarity +
+0.25 * text_relevance +
+0.15 * evidence_quality +
+0.10 * confidence_score +
+0.10 * freshness_score +
+0.05 * relationship_density
+)
+
+Implement:
+- weighted ranking
+- score normalization
+- reranking hooks
+- cursor pagination
+- filtering
+- sorting
+- query caching
+
+Verification:
+- semantic retrieval functional
+- hybrid ranking operational
+- pagination stable
+
+======================================================================
+PHASE 8 — FRONTEND APPLICATION
+
+Implement polished research-oriented frontend.
+
+Requirements:
+- SSR rendering
+- SEO optimization
+- responsive layouts
+- accessible semantic HTML
+- keyboard navigation
+- calm visual hierarchy
+- evidence-first layouts
+
+Implement pages:
+- home
+- browse claims
+- claim detail
+- submit claim
+- moderation queue
+- user profiles
+- search results
+
+Claim Detail Page Requirements:
+Evidence MUST visually dominate AI output.
+
+AI-generated sections MUST:
+- remain visually isolated
+- display provenance metadata
+- display generation timestamps
+- display model information
+
+Verification:
+- frontend fully typed
+- Lighthouse optimization passes
+- accessibility checks pass
+
+======================================================================
+PHASE 9 — GRAPH + TIMELINE SYSTEMS
+
+Graph Requirements:
+Use React Flow for relationship visualization.
+
+Implement:
+- contradiction graphs
+- dependency graphs
+- refinement graphs
+- causal relationship graphs
+- evidence clusters
+
+Graph UX:
+- calm interaction
+- limited animation
+- clustering support
+- node virtualization
+- zoom controls
+- relationship filtering
+
+Timeline Requirements:
+Implement:
+- confidence evolution
+- moderation history
+- evidence history
+- contradiction emergence
+- freshness decay history
+
+Verification:
+- graphs performant
+- timelines operational
+
+======================================================================
+PHASE 10 — OBSERVABILITY + ANALYTICS
+
+Implement production observability stack.
+
+Use:
+- Prometheus
+- Grafana
+- OpenTelemetry
+- structured JSON logging
+
+Track:
+- AI token usage
+- AI cost
+- cache hit rates
+- vector query latency
+- API latency
+- Celery queue health
+- error rates
+- moderation throughput
+
+Verification:
+- metrics visible
+- dashboards functional
+- tracing operational
+
+======================================================================
+PHASE 11 — TESTING + HARDENING
+
+Implement production-quality testing.
+
+Backend:
+- pytest
+- repository tests
+- service tests
+- API integration tests
+- Celery task tests
+
+Frontend:
+- component tests
+- integration tests
+- accessibility tests
+
+Infrastructure:
+- Docker integration tests
+- migration tests
+
+Requirements:
+- no failing tests
+- realistic seed data
+- deterministic test environment
+
+======================================================================
+PHASE 12 — DEPLOYMENT + DOCUMENTATION
+
+Implement production deployment readiness.
+
+Include:
+- DigitalOcean deployment guide
+- AWS scaling architecture notes
+- Kubernetes migration notes
+- nginx production configuration
+- production environment examples
+
+README Requirements:
+- architecture overview
+- infrastructure diagrams
+- AI architecture explanation
+- local setup
+- Docker setup
+- migrations
+- observability
+- scaling strategy
+- troubleshooting
+- operational notes
+
+FINAL REQUIREMENT
+
+The final system MUST feel:
+- production-grade
+- cohesive
+- modular
+- scalable
+- research-oriented
+- evidence-centric
+- audit-friendly
+
+The final implementation MUST NOT:
+- feel like a tutorial
+- feel prototype-quality
+- contain fake integrations
+- contain incomplete architecture
+- contain disconnected systems
+- contain placeholder infrastructure
+
+The system MUST run successfully locally using:
+
+docker compose up
+
+with:
+- frontend
+- backend
+- postgres
+- redis
+- celery worker
+- nginx
+
+fully operational.
