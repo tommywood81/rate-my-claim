@@ -1,0 +1,1 @@
+"""Make package a namespace."""
