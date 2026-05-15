@@ -39,7 +39,7 @@ These items match the Stage 1 scope from `notebooks/instructions.txt` (claim int
 ### Tests & docs
 
 - **pytest**: basic ASGI health test (`backend/tests/test_health.py`).
-- **`.env.example`** and this README for local and Docker usage.
+- **README** documents required **environment variables** for local and Docker usage (no committed `.env.example`).
 
 ---
 
@@ -89,10 +89,9 @@ When the items above are addressed in line with `notebooks/instructions.txt`, St
 
 ## Quick start
 
-```bash
-cp .env.example .env
-# Edit .env — set OPENAI_API_KEY and SECRET_KEY (32+ chars)
+Create a **`.env`** file in the repository root (see **Environment variables** below), then:
 
+```bash
 docker compose up --build
 ```
 
@@ -110,7 +109,33 @@ The first registered user becomes **admin** (bootstrap). Promote moderators by u
 
 ## Environment variables
 
-See `.env.example`. Critical:
+Add **`.env`** at the repo root (never commit secrets). Docker Compose loads it for backend, celery, and frontend. Example skeleton matching local defaults:
+
+```env
+# Never commit this file with real secrets.
+
+SECRET_KEY=<random-string-at-least-32-chars>
+OPENAI_API_KEY=
+
+POSTGRES_USER=rmc
+POSTGRES_PASSWORD=rmc_dev_password
+POSTGRES_DB=rate_my_claim
+
+DATABASE_URL=postgresql+asyncpg://rmc:rmc_dev_password@postgres:5432/rate_my_claim
+DATABASE_SYNC_URL=postgresql+psycopg2://rmc:rmc_dev_password@postgres:5432/rate_my_claim
+
+REDIS_URL=redis://redis:6379/0
+CELERY_BROKER_URL=redis://redis:6379/1
+CELERY_RESULT_BACKEND=redis://redis:6379/2
+
+CORS_ORIGINS=http://localhost:8080,http://127.0.0.1:8080
+PUBLIC_APP_URL=http://localhost:8080
+COOKIE_SECURE=false
+
+HTTP_PORT=8080
+```
+
+Critical:
 
 - `SECRET_KEY` — JWT signing (min 32 chars).
 - `DATABASE_URL` — async SQLAlchemy DSN (`postgresql+asyncpg://…`).
