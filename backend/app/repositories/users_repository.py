@@ -4,17 +4,13 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import RefreshToken, User, UserRole
+from app.repositories.base import RepositoryBase
 
 
-class UserRepository:
+class UserRepository(RepositoryBase):
     """Async user lookups and creation."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        """Attach session."""
-        self._session = session
 
     async def get_by_username(self, username: str) -> User | None:
         """Find user by unique username."""

@@ -38,7 +38,7 @@ These items match the Stage 1 scope from `notebooks/instructions.txt` (claim int
 
 ### Tests & docs
 
-- **pytest**: basic ASGI health test (`backend/tests/test_health.py`).
+- **pytest**: health check, Phase 2 repository wiring tests; optional **pgvector integration** test when `RUN_PG_INTEGRATION=1`.
 - **README** documents required **environment variables** for local and Docker usage (no committed `.env.example`).
 
 ---
@@ -156,6 +156,21 @@ Critical:
 cd backend
 pytest
 ```
+
+By default, **one integration test is skipped** (`RUN_PG_INTEGRATION` not set). Unit tests cover health and Phase 2 repository wiring.
+
+### Phase 2 verification (database + domain)
+
+Per `notebooks/instructions.txt` Phase 2, the relational model and pgvector layer are implemented in Alembic + SQLAlchemy. Use the following to validate locally:
+
+| Check | Command / notes |
+|--------|------------------|
+| **Migrations apply** | Already run on `backend` container start (`alembic upgrade head`). To re-run: `docker compose run --rm backend alembic upgrade head` |
+| **Migrations rollback** (destructive) | `docker compose run --rm backend alembic downgrade base` then `alembic upgrade head` — drops all app tables; use only on disposable volumes |
+| **Seed data** | With stack up: `docker compose exec -e SEED_DEVELOPMENT=true backend python scripts/seed_development.py` — creates `seed_admin` / `seed_moderator`, a sample claim with **1536-dim** embeddings, evidence, alias, revision, publisher, audit/system rows. Idempotent if `seed_admin` already exists. Optional password: `SEED_PASSWORD=...` |
+| **pgvector query smoke** | `RUN_PG_INTEGRATION=1` and a real `DATABASE_URL` (asyncpg) pointing at your Postgres, then `cd backend && pytest tests/test_phase2_pgvector_integration.py -q` |
+
+**Repositories (Phase 2):** shared `RepositoryBase`; domain access in `ClaimRepository`, `HybridSearchRepository`, `UserRepository`, `AIAnalysisRepository`, `EvidenceRepository`, `GraphRepository` (aliases, revisions, relationships), `PlatformRepository` (publisher, ingestion jobs, reputation, moderation listing), `AuditRepository` (audit logs, system events).
 
 ## Troubleshooting
 

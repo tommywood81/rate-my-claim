@@ -297,7 +297,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Drop all application objects."""
     op.execute("DROP TRIGGER IF EXISTS claims_search_vector_trigger ON claims")
-    op.execute("DROP FUNCTION IF EXISTS claims_search_vector_update")
+    op.execute("DROP FUNCTION IF EXISTS claims_search_vector_update() CASCADE")
     op.drop_table("reputation_events")
     op.drop_table("ingestion_jobs")
     op.drop_table("publisher_profiles")

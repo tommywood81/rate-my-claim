@@ -6,20 +6,16 @@ from typing import Sequence
 from uuid import UUID
 
 from sqlalchemy import Select, func, or_, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.claim import Claim, ClaimRelationship, ClaimVote, PendingClaim, ProcessingStatus
 from app.models.evidence import Evidence
+from app.repositories.base import RepositoryBase
 from app.utils.cursor import ClaimCursor
 
 
-class ClaimRepository:
+class ClaimRepository(RepositoryBase):
     """Async persistence helpers for claim aggregates."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        """Attach async session."""
-        self._session = session
 
     async def get_claim_by_slug(self, slug: str) -> Claim | None:
         """Load approved claim by public slug."""
@@ -174,12 +170,8 @@ class ClaimRepository:
         return (await self._session.execute(stmt)).scalars().all()
 
 
-class HybridSearchRepository:
+class HybridSearchRepository(RepositoryBase):
     """Hybrid semantic + lexical ranking over approved claims."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        """Attach session."""
-        self._session = session
 
     async def hybrid_search(
         self,
