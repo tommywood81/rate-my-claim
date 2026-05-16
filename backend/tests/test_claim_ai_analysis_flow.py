@@ -6,9 +6,8 @@ import os
 from typing import Any
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
-from app.main import app
 from app.services.ai.providers.base import BaseAIProvider
 
 _SKIP = os.environ.get("RUN_PG_INTEGRATION") != "1"
@@ -65,6 +64,7 @@ class StubAIProvider(BaseAIProvider):
 @pytest.mark.skipif(_SKIP, reason=_SKIP_REASON)
 @pytest.mark.asyncio
 async def test_moderator_post_ai_analysis_appears_on_detail(
+    async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Moderator triggers analysis; detail returns the new row (AI provider stubbed)."""
@@ -72,38 +72,36 @@ async def test_moderator_post_ai_analysis_appears_on_detail(
         "app.api.v1.routes.claims.get_ai_provider",
         lambda **kwargs: StubAIProvider(),
     )
-    transport = ASGITransport(app=app)
-    async with AsyncClient(
-        transport=transport,
-        base_url="http://test",
-        follow_redirects=True,
-    ) as client:
-        password = os.environ.get("SEED_PASSWORD", "SeedDev!ChangeMe123")
-        login = await client.post(
-            "/api/v1/auth/login",
-            json={"username": "seed_moderator", "password": password},
-        )
-        assert login.status_code == 200, login.text
+    password = os.environ.get("SEED_PASSWORD", "SeedDev!ChangeMe123")
+    login = await async_client.post(
+        "/api/v1/auth/login",
+        json={"username": "seed_moderator", "password": password},
+    )
+    assert login.status_code == 200, login.text
+    csrf = login.cookies.get("rmc_csrf", "")
 
-        listed = await client.get("/api/v1/claims?limit=1")
-        assert listed.status_code == 200, listed.text
-        rows = listed.json().get("data") or []
-        if not rows:
-            pytest.skip("No claims in database; run scripts/seed_development.py first")
-        slug = rows[0]["public_slug"]
+    listed = await async_client.get("/api/v1/claims?limit=1")
+    assert listed.status_code == 200, listed.text
+    rows = listed.json().get("data") or []
+    if not rows:
+        pytest.skip("No claims in database; run scripts/seed_development.py first")
+    slug = rows[0]["public_slug"]
 
-        before = await client.get(f"/api/v1/claims/{slug}")
-        assert before.status_code == 200
-        n_before = len(before.json().get("data", {}).get("ai_analyses", []))
+    before = await async_client.get(f"/api/v1/claims/{slug}")
+    assert before.status_code == 200
+    n_before = len(before.json().get("data", {}).get("ai_analyses", []))
 
-        posted = await client.post(f"/api/v1/claims/{slug}/ai-analysis")
-        assert posted.status_code == 200, posted.text
-        body = posted.json()
-        assert body["success"] is True
-        assert "Stub verdict" in body["data"]["generated_text"]
+    posted = await async_client.post(
+        f"/api/v1/claims/{slug}/ai-analysis",
+        headers={"X-CSRF-Token": csrf} if csrf else {},
+    )
+    assert posted.status_code == 200, posted.text
+    body = posted.json()
+    assert body["success"] is True
+    assert "Stub verdict" in body["data"]["generated_text"]
 
-        after = await client.get(f"/api/v1/claims/{slug}")
-        assert after.status_code == 200
-        analyses = after.json().get("data", {}).get("ai_analyses", [])
-        assert len(analyses) == n_before + 1
-        assert analyses[0]["analysis_type"] == "structured_verdict"
+    after = await async_client.get(f"/api/v1/claims/{slug}")
+    assert after.status_code == 200
+    analyses = after.json().get("data", {}).get("ai_analyses", [])
+    assert len(analyses) == n_before + 1
+    assert analyses[0]["analysis_type"] == "structured_verdict"
