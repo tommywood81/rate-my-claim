@@ -14,31 +14,45 @@ from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.repositories.claims_repository import ClaimRepository
 from app.services.ai.factory import get_ai_provider
 from app.services.ai.token_budget import TokenBudgetExceeded
+from app.services.ingestion.canonicalization_service import CanonicalizationService
+from app.services.ingestion.claim_normalization import normalize_claim_text
+from app.services.ingestion.duplicate_detection_service import DuplicateDetectionService
+from app.services.ingestion.pipeline_audit import IngestionPipelineAudit
 from app.services.retrieval.url_fetch_service import UrlFetchService
 
 logger = logging.getLogger(__name__)
+
+_TERMINAL = frozenset(
+    {
+        ProcessingStatus.awaiting_moderation,
+        ProcessingStatus.completed,
+        ProcessingStatus.rejected,
+        ProcessingStatus.revision_requested,
+    }
+)
 
 
 async def _run_pipeline(pending_id: UUID) -> None:
     """Execute embedding, dedupe, canonicalization, retrieval, and verdict."""
     settings = get_settings()
     provider = get_ai_provider(budget_scope=f"pending:{pending_id}")
+    canon_svc = CanonicalizationService()
+
     async with AsyncSessionLocal() as session:
         repo = ClaimRepository(session)
         ai_repo = AIAnalysisRepository(session)
+        audit = IngestionPipelineAudit(session)
         pending = await repo.get_pending(pending_id)
         if pending is None:
             return
-        if pending.processing_status in {
-            ProcessingStatus.awaiting_moderation,
-            ProcessingStatus.completed,
-            ProcessingStatus.rejected,
-        }:
+        if ProcessingStatus(str(pending.processing_status)) in _TERMINAL:
             return
 
         try:
+            pending.normalized_claim_text = normalize_claim_text(pending.raw_claim_text)
             pending.processing_status = ProcessingStatus.embedding
             await session.flush()
+            await audit.log_stage(pending_id=pending_id, stage="embedding")
 
             vec, emb_model = await provider.generate_embedding(pending.raw_claim_text)
             pending.embedding = vec
@@ -47,27 +61,26 @@ async def _run_pipeline(pending_id: UUID) -> None:
             pending.embedding_at = datetime.now(tz=UTC)
             pending.processing_status = ProcessingStatus.duplicate_check
             await session.flush()
+            await audit.log_stage(
+                pending_id=pending_id,
+                stage="duplicate_check",
+                details={"embedding_model": emb_model},
+            )
 
-            dup_ids: list[str] = []
-            for claim, dist in await repo.vector_similar_claims(vec, limit=12, exclude_id=None):
-                sim = 1.0 - float(dist)
-                if sim >= settings.duplicate_vector_threshold:
-                    dup_ids.append(str(claim.id))
-            sim_rows = await repo.vector_similar_pending(vec, limit=8, exclude_id=pending.id)
-            for other, dist in sim_rows:
-                sim = 1.0 - float(dist)
-                if sim >= settings.duplicate_vector_threshold:
-                    dup_ids.append(f"pending:{other.id}")
-            pending.duplicate_candidate_ids = dup_ids[:50]
+            dup_svc = DuplicateDetectionService(session, settings)
+            pending.duplicate_candidate_ids = await dup_svc.find_duplicate_candidate_ids(
+                vec, pending_id=pending.id
+            )
 
             pending.processing_status = ProcessingStatus.canonicalizing
             await session.flush()
+            await audit.log_stage(pending_id=pending_id, stage="canonicalizing")
 
-            canon = await provider.canonicalize_claim(pending.raw_claim_text)
+            canon = await canon_svc.canonicalize(pending.raw_claim_text, provider)
             rejection = canon.get("rejection_reason")
             if rejection:
                 pending.canonical_candidate_text = None
-                pending.normalized_claim_text = pending.raw_claim_text.strip()
+                pending.normalized_claim_text = normalize_claim_text(pending.raw_claim_text)
                 await ai_repo.add_analysis(
                     target_type="pending_claim",
                     target_id=pending.id,
@@ -80,16 +93,20 @@ async def _run_pipeline(pending_id: UUID) -> None:
                 )
                 pending.processing_status = ProcessingStatus.awaiting_moderation
                 pending.ai_summary = "Claim requires moderator review (automatic rejection hint)."
+                await audit.log_stage(
+                    pending_id=pending_id,
+                    stage="awaiting_moderation",
+                    details={"canonicalization_rejected": True},
+                )
                 await session.commit()
                 return
 
-            canonical = str(canon.get("canonical_text") or pending.raw_claim_text).strip()
-            normalized = str(canon.get("normalized_text") or canonical).strip()
-            pending.canonical_candidate_text = canonical
-            pending.normalized_claim_text = normalized
+            pending.canonical_candidate_text = str(canon.get("canonical_text", "")).strip()
+            pending.normalized_claim_text = str(canon.get("normalized_text", "")).strip()
 
             pending.processing_status = ProcessingStatus.enriching
             await session.flush()
+            await audit.log_stage(pending_id=pending_id, stage="enriching")
 
             fetcher = UrlFetchService()
             url_blocks: list[dict[str, str]] = []
@@ -106,6 +123,7 @@ async def _run_pipeline(pending_id: UUID) -> None:
                         }
                     )
 
+            canonical = pending.canonical_candidate_text or pending.raw_claim_text
             evidence_ctx = await repo.evidence_for_similar_claims(vec, limit=24)
             line_map: dict[int, dict[str, str]] = {}
             lines: list[str] = []
@@ -157,6 +175,14 @@ async def _run_pipeline(pending_id: UUID) -> None:
             summary = await provider.summarize_evidence(context[:8000])
             pending.ai_summary = summary
             pending.processing_status = ProcessingStatus.awaiting_moderation
+            await audit.log_stage(
+                pending_id=pending_id,
+                stage="awaiting_moderation",
+                details={
+                    "duplicate_count": len(pending.duplicate_candidate_ids or []),
+                    "url_blocks": len(url_blocks),
+                },
+            )
             await session.commit()
         except TokenBudgetExceeded as exc:
             logger.warning(
@@ -181,6 +207,11 @@ async def _run_pipeline(pending_id: UUID) -> None:
                     await session2.commit()
 
 
+async def enrich_pending_claim_async(pending_id: UUID | str) -> None:
+    """Async entrypoint for tests and in-process callers."""
+    await _run_pipeline(UUID(str(pending_id)))
+
+
 def run_pending_enrichment(pending_id: str) -> None:
     """Sync entrypoint for Celery worker."""
-    asyncio.run(_run_pipeline(UUID(pending_id)))
+    asyncio.run(enrich_pending_claim_async(pending_id))

@@ -13,6 +13,13 @@ class CreateClaimRequest(BaseModel):
     source_urls: list[str] = Field(default_factory=list, max_length=20)
 
 
+class ResubmitPendingRequest(BaseModel):
+    """Revise a pending claim after moderator requested changes."""
+
+    raw_claim_text: str = Field(min_length=10, max_length=8000)
+    source_urls: list[str] | None = Field(default=None, max_length=20)
+
+
 class PendingClaimResponse(BaseModel):
     """Pipeline state for a submitted claim."""
 

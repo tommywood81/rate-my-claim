@@ -15,6 +15,10 @@ from app.models.moderation import ModerationAction, ModerationActionType
 from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.repositories.claims_repository import ClaimRepository
 from app.services.ai.factory import get_ai_provider
+from app.services.moderation.state_machine import (
+    assert_claim_status_transition,
+    assert_pending_transition,
+)
 from app.utils.slug import public_slug_for_claim
 
 logger = logging.getLogger(__name__)
@@ -63,8 +67,8 @@ class ModerationService:
         pending = await self._claims.get_pending(pending_id)
         if pending is None:
             raise ValueError("pending_not_found")
-        if pending.processing_status != ProcessingStatus.awaiting_moderation:
-            raise ValueError("invalid_pending_state")
+        current = ProcessingStatus(str(pending.processing_status))
+        assert_pending_transition(current, ProcessingStatus.completed)
 
         canonical = pending.canonical_candidate_text or pending.raw_claim_text
         new_id = uuid4()
@@ -98,7 +102,7 @@ class ModerationService:
             embedding_version=pending.embedding_version,
             embedding_at=pending.embedding_at,
             domain=None,
-            status=ClaimStatus.insufficient_evidence,
+            status=ClaimStatus.insufficient_evidence.value,
             confidence_score=confidence,
             controversy_score=controversy,
             evidence_score=0.0,
@@ -170,7 +174,7 @@ class ModerationService:
         claim.evidence_count = evidence_added
         claim.evidence_score = min(1.0, 0.2 * evidence_added)
         if evidence_added > 0:
-            claim.status = ClaimStatus.weak_evidence
+            claim.status = ClaimStatus.weak_evidence.value
 
         pending.processing_status = ProcessingStatus.completed
         self._session.add(
@@ -228,6 +232,8 @@ class ModerationService:
         pending = await self._claims.get_pending(pending_id)
         if pending is None:
             raise ValueError("pending_not_found")
+        current = ProcessingStatus(str(pending.processing_status))
+        assert_pending_transition(current, ProcessingStatus.rejected)
         pending.processing_status = ProcessingStatus.rejected
         await self._log_action(
             actor_id=actor_id,
@@ -236,4 +242,128 @@ class ModerationService:
             target_id=pending_id,
             explanation=explanation,
             payload=None,
+        )
+
+    async def request_revision_pending(
+        self, *, pending_id: UUID, actor_id: UUID, explanation: str | None
+    ) -> None:
+        """Send pending claim back to submitter for revision."""
+        pending = await self._claims.get_pending(pending_id)
+        if pending is None:
+            raise ValueError("pending_not_found")
+        current = ProcessingStatus(str(pending.processing_status))
+        assert_pending_transition(current, ProcessingStatus.revision_requested)
+        pending.processing_status = ProcessingStatus.revision_requested
+        await self._log_action(
+            actor_id=actor_id,
+            action_type=ModerationActionType.request_revision,
+            target_type="pending_claim",
+            target_id=pending_id,
+            explanation=explanation,
+            payload=None,
+        )
+
+    async def reprocess_pending(self, *, pending_id: UUID, actor_id: UUID | None) -> None:
+        """Reset pipeline to submitted for Celery re-run (failed or revision)."""
+        pending = await self._claims.get_pending(pending_id)
+        if pending is None:
+            raise ValueError("pending_not_found")
+        current = ProcessingStatus(str(pending.processing_status))
+        assert_pending_transition(current, ProcessingStatus.submitted)
+        pending.processing_status = ProcessingStatus.submitted
+        pending.error_message = None
+        await self._log_action(
+            actor_id=actor_id,
+            action_type=ModerationActionType.update_scores,
+            target_type="pending_claim",
+            target_id=pending_id,
+            explanation="Re-queued for enrichment",
+            payload={"reprocess": True},
+        )
+
+    async def _apply_claim_status(
+        self,
+        *,
+        claim: Claim,
+        new_status: ClaimStatus,
+        actor_id: UUID,
+        explanation: str | None,
+        action_type: ModerationActionType,
+    ) -> Claim:
+        """Transition claim status with revision history and audit row."""
+        prev = ClaimStatus(str(claim.status))
+        assert_claim_status_transition(prev, new_status)
+        self._session.add(
+            ClaimRevision(
+                claim_id=claim.id,
+                previous_status=str(prev.value),
+                new_status=str(new_status.value),
+                previous_confidence=claim.confidence_score,
+                new_confidence=claim.confidence_score,
+                explanation=explanation,
+                created_by=actor_id,
+                created_at=datetime.now(tz=UTC),
+            )
+        )
+        claim.status = new_status.value
+        claim.last_reviewed_at = datetime.now(tz=UTC)
+        await self._log_action(
+            actor_id=actor_id,
+            action_type=action_type,
+            target_type="claim",
+            target_id=claim.id,
+            explanation=explanation,
+            payload={"previous_status": str(prev.value), "new_status": str(new_status.value)},
+        )
+        await self._session.flush()
+        return claim
+
+    async def dispute_claim(
+        self, *, claim_id: UUID, actor_id: UUID, explanation: str | None
+    ) -> Claim:
+        """Mark an approved claim as disputed."""
+        claim = await self._claims.get_claim_by_id(claim_id)
+        if claim is None:
+            raise ValueError("claim_not_found")
+        return await self._apply_claim_status(
+            claim=claim,
+            new_status=ClaimStatus.disputed,
+            actor_id=actor_id,
+            explanation=explanation,
+            action_type=ModerationActionType.update_scores,
+        )
+
+    async def archive_claim(
+        self, *, claim_id: UUID, actor_id: UUID, explanation: str | None
+    ) -> Claim:
+        """Archive an approved claim."""
+        claim = await self._claims.get_claim_by_id(claim_id)
+        if claim is None:
+            raise ValueError("claim_not_found")
+        return await self._apply_claim_status(
+            claim=claim,
+            new_status=ClaimStatus.archived,
+            actor_id=actor_id,
+            explanation=explanation,
+            action_type=ModerationActionType.archive_claim,
+        )
+
+    async def restore_claim(
+        self,
+        *,
+        claim_id: UUID,
+        actor_id: UUID,
+        explanation: str | None,
+        target_status: ClaimStatus = ClaimStatus.weak_evidence,
+    ) -> Claim:
+        """Restore disputed or archived claim to an active status."""
+        claim = await self._claims.get_claim_by_id(claim_id)
+        if claim is None:
+            raise ValueError("claim_not_found")
+        return await self._apply_claim_status(
+            claim=claim,
+            new_status=target_status,
+            actor_id=actor_id,
+            explanation=explanation,
+            action_type=ModerationActionType.update_scores,
         )

@@ -8,6 +8,8 @@ type Pending = {
   raw_claim_text: string;
   processing_status: string;
   error_message?: string | null;
+  ai_summary?: string | null;
+  duplicate_candidate_ids?: string[] | null;
   created_at: string;
 };
 
@@ -83,7 +85,11 @@ export default function ModerationPage() {
     }
   }
 
-  async function act(id: string, action: "approve_claim" | "reject_claim") {
+  async function act(
+    id: string,
+    action: "approve_claim" | "reject_claim" | "request_revision",
+    remove = true,
+  ) {
     setErr(null);
     try {
       await apiFetch("/api/v1/moderation/actions", {
@@ -92,16 +98,38 @@ export default function ModerationPage() {
           action_type: action,
           target_type: "pending_claim",
           target_id: id,
-          explanation: action === "approve_claim" ? "Approved via UI" : "Rejected via UI",
+          explanation:
+            action === "approve_claim"
+              ? "Approved via UI"
+              : action === "reject_claim"
+                ? "Rejected via UI"
+                : "Revision requested via UI",
         }),
       });
-      setRows((r) => r.filter((x) => x.id !== id));
+      if (remove) {
+        setRows((r) => r.filter((x) => x.id !== id));
+      } else {
+        await loadQueue();
+      }
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Action failed");
     }
   }
 
+  async function reprocess(id: string) {
+    setErr(null);
+    try {
+      await apiFetch(`/api/v1/moderation/pending-claims/${id}/reprocess`, { method: "POST" });
+      await loadQueue();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Reprocess failed");
+    }
+  }
+
   const canApprove = (p: Pending) => p.processing_status === "awaiting_moderation";
+  const canRevise = (p: Pending) => p.processing_status === "awaiting_moderation";
+  const canReprocess = (p: Pending) =>
+    p.processing_status === "failed" || p.processing_status === "revision_requested";
 
   return (
     <div className="space-y-4">
@@ -149,6 +177,18 @@ export default function ModerationPage() {
               {new Date(p.created_at).toLocaleString()}
             </p>
             <p className="text-sm">{p.raw_claim_text}</p>
+            {p.ai_summary && (
+              <p className="text-xs text-[var(--muted)]">
+                <span className="font-medium">AI summary:</span> {p.ai_summary}
+              </p>
+            )}
+            {p.duplicate_candidate_ids && p.duplicate_candidate_ids.length > 0 && (
+              <p className="text-xs text-[var(--muted)]">
+                <span className="font-medium">Duplicate candidates:</span>{" "}
+                {p.duplicate_candidate_ids.slice(0, 5).join(", ")}
+                {p.duplicate_candidate_ids.length > 5 ? "…" : ""}
+              </p>
+            )}
             {p.error_message && (
               <p className="rounded border border-red-200 bg-red-50 px-2 py-1 font-mono text-xs text-red-900">
                 {p.error_message}
@@ -173,6 +213,24 @@ export default function ModerationPage() {
                 onClick={() => act(p.id, "reject_claim")}
               >
                 Reject
+              </button>
+              <button
+                type="button"
+                className="rounded border border-[var(--border)] px-3 py-1 text-xs hover:bg-[var(--card)] disabled:opacity-45"
+                onClick={() => act(p.id, "request_revision", false)}
+                disabled={!canRevise(p)}
+                title={canRevise(p) ? undefined : "Available when awaiting_moderation"}
+              >
+                Request revision
+              </button>
+              <button
+                type="button"
+                className="rounded border border-[var(--border)] px-3 py-1 text-xs hover:bg-[var(--card)] disabled:opacity-45"
+                onClick={() => reprocess(p.id)}
+                disabled={!canReprocess(p)}
+                title={canReprocess(p) ? undefined : "For failed or revision_requested"}
+              >
+                Reprocess
               </button>
             </div>
           </li>

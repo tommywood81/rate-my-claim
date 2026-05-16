@@ -37,6 +37,7 @@ class ProcessingStatus(str, enum.Enum):
     canonicalizing = "canonicalizing"
     enriching = "enriching"
     awaiting_moderation = "awaiting_moderation"
+    revision_requested = "revision_requested"
     completed = "completed"
     rejected = "rejected"
     failed = "failed"

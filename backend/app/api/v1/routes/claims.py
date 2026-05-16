@@ -13,8 +13,12 @@ from app.core.config import Settings
 from app.db.session import get_db
 from app.models.evidence import EvidenceStance
 from app.models.user import User
+from app.models.claim import ProcessingStatus
 from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.repositories.claims_repository import ClaimRepository
+from app.repositories.platform_repository import PlatformRepository
+from app.services.ingestion.claim_normalization import normalize_claim_text
+from app.services.ingestion.pipeline_audit import IngestionPipelineAudit
 from app.schemas.claims import (
     AIAnalysisResponse,
     ClaimDetailResponse,
@@ -22,6 +26,7 @@ from app.schemas.claims import (
     CreateClaimRequest,
     EvidenceResponse,
     PendingClaimResponse,
+    ResubmitPendingRequest,
     VoteRequest,
 )
 from app.schemas.common import CursorMeta, SuccessEnvelope
@@ -41,10 +46,20 @@ async def submit_claim(
 ) -> SuccessEnvelope[PendingClaimResponse]:
     """Queue a new claim for async enrichment."""
     repo = ClaimRepository(db)
+    normalized = normalize_claim_text(body.raw_claim_text)
     pending = await repo.create_pending(
-        raw_text=body.raw_claim_text,
+        raw_text=normalized,
         user_id=user.id,
         source_urls=body.source_urls,
+    )
+    pending.normalized_claim_text = normalized
+    platform = PlatformRepository(db)
+    for url in (body.source_urls or [])[:20]:
+        await platform.create_ingestion_job(pending_claim_id=pending.id, source_url=str(url))
+    await IngestionPipelineAudit(db).log_submitted(
+        pending_id=pending.id,
+        actor_id=user.id,
+        source_url_count=len(body.source_urls or []),
     )
     process_pending_claim.delay(str(pending.id))
     return SuccessEnvelope(data=PendingClaimResponse.model_validate(pending))
@@ -61,6 +76,30 @@ async def get_pending(
     pending = await repo.get_pending(pending_id)
     if pending is None or pending.submitted_by != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    return SuccessEnvelope(data=PendingClaimResponse.model_validate(pending))
+
+
+@router.patch("/pending-claims/{pending_id}", response_model=SuccessEnvelope[PendingClaimResponse])
+async def resubmit_pending(
+    pending_id: UUID,
+    body: ResubmitPendingRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> SuccessEnvelope[PendingClaimResponse]:
+    """Revise and re-queue a submission after moderator requested revision."""
+    repo = ClaimRepository(db)
+    pending = await repo.get_pending(pending_id)
+    if pending is None or pending.submitted_by != user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    if ProcessingStatus(str(pending.processing_status)) != ProcessingStatus.revision_requested:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="not_revision_requested")
+    pending.raw_claim_text = normalize_claim_text(body.raw_claim_text)
+    pending.normalized_claim_text = pending.raw_claim_text
+    if body.source_urls is not None:
+        pending.source_urls = body.source_urls
+    pending.processing_status = ProcessingStatus.submitted
+    pending.error_message = None
+    process_pending_claim.delay(str(pending.id))
     return SuccessEnvelope(data=PendingClaimResponse.model_validate(pending))
 
 
