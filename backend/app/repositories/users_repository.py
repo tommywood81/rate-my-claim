@@ -48,6 +48,11 @@ class UserRepository(RepositoryBase):
         await self._session.flush()
         return row
 
+    async def get_refresh_token(self, jti: str) -> RefreshToken | None:
+        """Load refresh token row by jti."""
+        stmt = select(RefreshToken).where(RefreshToken.jti == jti)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def revoke_refresh_token(self, jti: str) -> None:
         """Mark refresh token revoked."""
         stmt = select(RefreshToken).where(RefreshToken.jti == jti)
@@ -55,7 +60,16 @@ class UserRepository(RepositoryBase):
         if row and row.revoked_at is None:
             row.revoked_at = datetime.now(tz=UTC)
 
-    async def get_refresh_token(self, jti: str) -> RefreshToken | None:
-        """Load refresh token by jti."""
-        stmt = select(RefreshToken).where(RefreshToken.jti == jti)
-        return (await self._session.execute(stmt)).scalar_one_or_none()
+    async def update_password(self, user_id: UUID, password_hash: str) -> None:
+        """Replace password hash."""
+        user = await self.get_by_id(user_id)
+        if user is None:
+            raise ValueError("user_not_found")
+        user.password_hash = password_hash
+
+    async def set_email_verified(self, user_id: UUID) -> None:
+        """Mark email as verified at current UTC time."""
+        user = await self.get_by_id(user_id)
+        if user is None:
+            raise ValueError("user_not_found")
+        user.email_verified_at = datetime.now(tz=UTC)

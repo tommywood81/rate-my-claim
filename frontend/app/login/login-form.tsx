@@ -35,9 +35,12 @@ export function LoginForm({ defaultNext }: Props) {
       if (!res.ok) {
         throw new Error(messageFromApiBody(body, res.statusText));
       }
-      const rec = body as { success?: boolean };
+      const rec = body as { success?: boolean; meta?: { csrf_token?: string } };
       if (rec.success === false) {
         throw new Error(messageFromApiBody(body, "Login failed"));
+      }
+      if (rec.meta?.csrf_token && typeof document !== "undefined") {
+        document.cookie = `rmc_csrf=${encodeURIComponent(rec.meta.csrf_token)}; path=/; SameSite=Lax`;
       }
       const next = defaultNext?.startsWith("/") ? defaultNext : "/";
       router.push(next);

@@ -89,6 +89,33 @@ class Settings(BaseSettings):
     )
 
     rate_limit_default: str = Field(default="60/minute", alias="RATE_LIMIT_DEFAULT")
+    auth_login_rate_limit: str = Field(default="10/minute", alias="AUTH_LOGIN_RATE_LIMIT")
+    auth_register_rate_limit: str = Field(default="5/minute", alias="AUTH_REGISTER_RATE_LIMIT")
+    auth_forgot_password_rate_limit: str = Field(
+        default="5/minute",
+        alias="AUTH_FORGOT_PASSWORD_RATE_LIMIT",
+    )
+    auth_brute_force_max_attempts: int = Field(default=5, ge=1, alias="AUTH_BRUTE_FORCE_MAX_ATTEMPTS")
+    auth_brute_force_lockout_seconds: int = Field(
+        default=900,
+        ge=60,
+        alias="AUTH_BRUTE_FORCE_LOCKOUT_SECONDS",
+    )
+    auth_password_reset_expire_minutes: int = Field(
+        default=60,
+        ge=5,
+        alias="AUTH_PASSWORD_RESET_EXPIRE_MINUTES",
+    )
+    auth_email_verify_expire_hours: int = Field(
+        default=48,
+        ge=1,
+        alias="AUTH_EMAIL_VERIFY_EXPIRE_HOURS",
+    )
+    auth_expose_dev_tokens: bool = Field(
+        default=False,
+        alias="AUTH_EXPOSE_DEV_TOKENS",
+        description="Return reset/verify tokens in API meta (development only).",
+    )
     csrf_cookie_name: str = "rmc_csrf"
     access_cookie_name: str = "rmc_access"
     refresh_cookie_name: str = "rmc_refresh"

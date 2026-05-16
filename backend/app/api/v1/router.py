@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1.routes import auth, claims, moderation, search, users
+from app.api.v1.routes import auth, claims, expert, moderation, search, users
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
@@ -10,3 +10,4 @@ api_router.include_router(claims.router)
 api_router.include_router(moderation.router)
 api_router.include_router(search.router)
 api_router.include_router(users.router)
+api_router.include_router(expert.router)

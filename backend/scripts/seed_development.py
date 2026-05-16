@@ -72,7 +72,7 @@ async def _run() -> None:
         mod = User(
             id=uuid4(),
             username="seed_moderator",
-            email="seed-mod@example.local",
+            email="seed-mod@example.com",
             password_hash=get_password_hash(pwd),
             role=UserRole.moderator.value,
         )

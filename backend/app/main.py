@@ -10,11 +10,15 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.api.v1.router import api_router
 from app.api.v1.routes import health
 from app.core.config import get_settings
+from app.core.csrf import csrf_check_required, validate_csrf
 from app.core.logging import configure_logging
+from app.core.rate_limit import limiter
 from app.services.ai.token_budget import TokenBudgetExceeded
 
 logger = logging.getLogger(__name__)
@@ -37,6 +41,8 @@ def create_app() -> FastAPI:
     """Build FastAPI app with middleware and routes."""
     settings = get_settings()
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     app.add_middleware(
         CORSMiddleware,
@@ -56,6 +62,23 @@ def create_app() -> FastAPI:
         if cid:
             response.headers["X-Request-ID"] = cid
         return response
+
+    @app.middleware("http")
+    async def csrf_protection(request: Request, call_next):
+        """Double-submit CSRF for cookie-based browser sessions."""
+        if csrf_check_required(request) and not validate_csrf(request, settings):
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "success": False,
+                    "error": {
+                        "code": "CSRF_VALIDATION_FAILED",
+                        "message": "Missing or invalid CSRF token.",
+                        "details": {},
+                    },
+                },
+            )
+        return await call_next(request)
 
     @app.exception_handler(TokenBudgetExceeded)
     async def openai_token_budget_handler(request: Request, exc: TokenBudgetExceeded):

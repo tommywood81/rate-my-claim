@@ -80,3 +80,5 @@ def require_roles(*roles: UserRole):
 
 
 ModeratorUser = Annotated[User, Depends(require_roles(UserRole.moderator, UserRole.admin))]
+ExpertUser = Annotated[User, Depends(require_roles(UserRole.expert, UserRole.moderator, UserRole.admin))]
+AdminUser = Annotated[User, Depends(require_roles(UserRole.admin))]

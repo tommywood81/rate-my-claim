@@ -1,6 +1,7 @@
 """Import ORM models for Alembic and metadata registration."""
 
 from app.models.ai_analysis import AIAnalysis
+from app.models.auth_token import AuthOneTimeToken
 from app.models.audit import AuditLog, SystemEvent
 from app.models.claim import (
     Claim,
@@ -19,6 +20,7 @@ from app.models.user import RefreshToken, User
 
 __all__ = [
     "AIAnalysis",
+    "AuthOneTimeToken",
     "AuditLog",
     "Claim",
     "ClaimAlias",
