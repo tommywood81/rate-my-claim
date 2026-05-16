@@ -17,7 +17,7 @@ import random
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.core.config import get_settings
 from app.core.security import get_password_hash
@@ -48,6 +48,14 @@ async def _run() -> None:
 
     settings = get_settings()
     async with AsyncSessionLocal() as session:
+        users_table = await session.scalar(text("SELECT to_regclass('public.users')"))
+        if users_table is None:
+            logger.error(
+                "schema_missing_apply_migrations_first: "
+                "docker compose exec backend alembic upgrade head"
+            )
+            raise SystemExit(1)
+
         existing = await session.scalar(select(User.id).where(User.username == "seed_admin"))
         if existing is not None:
             logger.info("seed_already_applied")
