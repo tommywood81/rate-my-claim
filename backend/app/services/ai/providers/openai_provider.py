@@ -10,6 +10,7 @@ from openai import AsyncOpenAI
 
 from app.core.config import get_settings
 from app.services.ai.providers.base import BaseAIProvider
+from app.services.ai.token_budget import budget_chat_call, budget_embedding_call
 
 logger = logging.getLogger(__name__)
 
@@ -19,31 +20,58 @@ class OpenAIProvider(BaseAIProvider):
 
     name = "openai"
 
-    def __init__(self, client: AsyncOpenAI | None = None) -> None:
+    def __init__(
+        self,
+        client: AsyncOpenAI | None = None,
+        *,
+        budget_scope: str = "unscoped",
+    ) -> None:
         """Initialize client from settings when not injected."""
         settings = get_settings()
         if not settings.openai_api_key:
             raise RuntimeError("OPENAI_API_KEY is required for OpenAIProvider")
         self._client = client or AsyncOpenAI(api_key=settings.openai_api_key)
         self._settings = settings
+        self._budget_scope = budget_scope
 
     async def generate_embedding(self, text: str) -> tuple[list[float], str]:
         """Create a single embedding vector."""
         model = self._settings.embedding_model
-        response = await self._client.embeddings.create(model=model, input=text[:8000])
+        text_in = text[:8000]
+
+        async def call() -> Any:
+            return await self._client.embeddings.create(model=model, input=text_in)
+
+        response = await budget_embedding_call(
+            settings=self._settings,
+            scope_key=self._budget_scope,
+            text=text_in,
+            call=call,
+        )
         vec = list(response.data[0].embedding)
         return vec, model
 
     async def _chat_json(self, system: str, user: str, *, model: str) -> dict[str, Any]:
         """Parse JSON object from chat completion."""
-        completion = await self._client.chat.completions.create(
-            model=model,
-            temperature=0.1,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            response_format={"type": "json_object"},
+
+        async def call() -> Any:
+            return await self._client.chat.completions.create(
+                model=model,
+                temperature=0.1,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                response_format={"type": "json_object"},
+            )
+
+        completion = await budget_chat_call(
+            settings=self._settings,
+            scope_key=self._budget_scope,
+            system=system,
+            user=user,
+            completion_reserve=3072,
+            call=call,
         )
         content = completion.choices[0].message.content or "{}"
         try:
@@ -66,19 +94,34 @@ class OpenAIProvider(BaseAIProvider):
     async def summarize_evidence(self, context: str) -> str:
         """Summarize only what is explicitly present in context."""
         system = "Summarize retrieved evidence in <=120 words. Do not invent sources."
-        completion = await self._client.chat.completions.create(
-            model=self._settings.ai_model_cheap,
-            temperature=0.2,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": context[:12000]},
-            ],
+        user = context[:12000]
+
+        async def call() -> Any:
+            return await self._client.chat.completions.create(
+                model=self._settings.ai_model_cheap,
+                temperature=0.2,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            )
+
+        completion = await budget_chat_call(
+            settings=self._settings,
+            scope_key=self._budget_scope,
+            system=system,
+            user=user,
+            completion_reserve=512,
+            call=call,
         )
         return (completion.choices[0].message.content or "").strip()
 
     async def classify_stance(self, claim: str, evidence_excerpt: str) -> str:
         """Classify stance using cheap model."""
-        system = 'Classify relationship of excerpt to claim. JSON: {"stance":"supports|contradicts|contextualizes"}'
+        system = (
+            'Classify relationship of excerpt to claim. '
+            'JSON: {"stance":"supports|contradicts|contextualizes"}'
+        )
         data = await self._chat_json(
             system,
             f"Claim: {claim}\nExcerpt: {evidence_excerpt}",
@@ -117,17 +160,33 @@ class OpenAIProvider(BaseAIProvider):
             "Identify tensions or contradictions across evidence blocks. "
             "If none, say so. Max 200 words. Ground only in provided blocks."
         )
-        completion = await self._client.chat.completions.create(
-            model=self._settings.ai_model_reasoning,
-            temperature=0.2,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": f"Claim: {claim}\nBlocks:\n{evidence_blocks[:14000]}"},
-            ],
+        user = f"Claim: {claim}\nBlocks:\n{evidence_blocks[:14000]}"
+
+        async def call() -> Any:
+            return await self._client.chat.completions.create(
+                model=self._settings.ai_model_reasoning,
+                temperature=0.2,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            )
+
+        completion = await budget_chat_call(
+            settings=self._settings,
+            scope_key=self._budget_scope,
+            system=system,
+            user=user,
+            completion_reserve=1024,
+            call=call,
         )
         return (completion.choices[0].message.content or "").strip()
 
-    async def generate_confidence_analysis(self, claim: str, evidence_digest: str) -> dict[str, Any]:
+    async def generate_confidence_analysis(
+        self,
+        claim: str,
+        evidence_digest: str,
+    ) -> dict[str, Any]:
         """Return component scores in [0,1]."""
         system = (
             "Score evidence support strength (not absolute truth). "

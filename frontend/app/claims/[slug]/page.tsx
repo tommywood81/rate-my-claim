@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import { ClaimAiAnalysisPanel } from "./claim-ai-panel";
+
 type Detail = {
   canonical_claim_text: string;
   public_slug: string;
@@ -13,9 +15,11 @@ type Detail = {
   ai_analyses: { analysis_type: string; model_name: string; generated_text: string; created_at: string }[];
 };
 
+export const dynamic = "force-dynamic";
+
 async function load(slug: string) {
   const base = process.env.INTERNAL_API_URL || "http://127.0.0.1:8000";
-  const res = await fetch(`${base}/api/v1/claims/${slug}`, { next: { revalidate: 30 } });
+  const res = await fetch(`${base}/api/v1/claims/${encodeURIComponent(slug)}`, { cache: "no-store" });
   if (!res.ok) return null;
   const body = await res.json();
   return body.data as Detail;
@@ -77,7 +81,7 @@ export default async function ClaimPage({ params }: { params: Promise<{ slug: st
         </h2>
         <ul className="space-y-3 text-sm">
           {d.ai_analyses.map((a, i) => (
-            <li key={`${a.analysis_type}-${i}`} className="border-l-2 border-[var(--accent)] pl-3">
+            <li key={`${a.analysis_type}-${i}-${a.created_at}`} className="border-l-2 border-[var(--accent)] pl-3">
               <p className="text-xs text-[var(--muted)]">
                 {a.analysis_type} · {a.model_name} · {new Date(a.created_at).toLocaleString()}
               </p>
@@ -86,6 +90,7 @@ export default async function ClaimPage({ params }: { params: Promise<{ slug: st
           ))}
           {d.ai_analyses.length === 0 && <li className="text-[var(--muted)]">No AI analyses stored for this claim.</li>}
         </ul>
+        <ClaimAiAnalysisPanel slug={slug} />
       </section>
     </article>
   );

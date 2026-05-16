@@ -20,7 +20,10 @@ export default function SubmitPage() {
         method: "POST",
         body: JSON.stringify({ raw_claim_text: text, source_urls: list }),
       });
-      setMsg(`Queued submission ${data.id}. Check status under your account (pending endpoint).`);
+      setMsg(
+        `Queued submission ${data.id}. It appears on the Moderation page while the worker runs ` +
+          `(status moves from submitted → … → awaiting_moderation). Ensure Celery is up and OPENAI_API_KEY is set.`,
+      );
       setText("");
       setUrls("");
     } catch (err: unknown) {

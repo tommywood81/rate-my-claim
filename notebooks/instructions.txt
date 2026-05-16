@@ -220,6 +220,10 @@ OPENAI_API_KEY
 
 Implement provider abstraction immediately so future providers can replace OpenAI without rewrites.
 
+TOKEN BUDGETS (SAFETY DURING DEVELOPMENT)
+
+The backend enforces optional OpenAI token caps stored in Redis: a rolling per-UTC-day limit (total_tokens reported by the API, with conservative pre-flight estimates before each call) and a per-scope limit (one pending enrichment job, one claim-analysis action, one search request embedding, or one approve-pending embedding batch). Defaults are conservative for local dev; set OPENAI_ENFORCE_TOKEN_BUDGETS=false to disable, or raise OPENAI_MAX_TOKENS_PER_DAY / OPENAI_MAX_TOKENS_PER_CLAIM_SCOPE (0 disables that cap). See README → Environment variables.
+
 Future providers must be supported architecturally:
 
 - OpenAI

@@ -117,6 +117,11 @@ Add **`.env`** at the repo root (never commit secrets). Docker Compose loads it 
 SECRET_KEY=<random-string-at-least-32-chars>
 OPENAI_API_KEY=
 
+# Optional: cap OpenAI usage during development (see README)
+# OPENAI_ENFORCE_TOKEN_BUDGETS=true
+# OPENAI_MAX_TOKENS_PER_DAY=200000
+# OPENAI_MAX_TOKENS_PER_CLAIM_SCOPE=80000
+
 POSTGRES_USER=rmc
 POSTGRES_PASSWORD=rmc_dev_password
 POSTGRES_DB=rate_my_claim
@@ -142,7 +147,17 @@ Critical:
 - `OPENAI_API_KEY` — required for embeddings and enrichment.
 - `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` — cache and task broker.
 
-## AI pipeline (Stage 1)
+### OpenAI token budgets (development safety)
+
+Counts are stored in **Redis** using `total_tokens` from API responses (with rough pre-call estimates to block calls that would obviously exceed caps). Scope keys group usage: `pending:{uuid}` (Celery enrichment), `claim:{uuid}` (moderator “Generate AI analysis” on a claim), `search:{uuid}` (per search request embedding), `approve_pending:{uuid}` (moderation approve embeddings).
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `OPENAI_ENFORCE_TOKEN_BUDGETS` | `true` | Set `false` to disable all caps. |
+| `OPENAI_MAX_TOKENS_PER_DAY` | `200000` | Max **total** OpenAI tokens per **UTC calendar day** (`0` = no daily cap). |
+| `OPENAI_MAX_TOKENS_PER_CLAIM_SCOPE` | `80000` | Max tokens per **scope** above (`0` = no per-scope cap). |
+
+If a cap is hit, synchronous API routes return **429** with `OPENAI_TOKEN_BUDGET_EXCEEDED`; Celery enrichment marks the pending row **failed** with an explanatory `error_message`.
 
 1. Claim submitted → `pending_claims` row, Celery task `claims.process_pending`.
 2. Embedding stored on pending row; vector similarity finds duplicate **candidates** (never auto-merges).

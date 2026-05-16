@@ -1,3 +1,5 @@
+import { messageFromApiBody } from "./api-errors";
+
 const API_BASE = "";
 
 export type ApiSuccess<T> = { success: true; data: T; meta?: Record<string, unknown> };
@@ -11,12 +13,18 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       ...(init?.headers || {}),
     },
   });
-  const body = await res.json();
+  let body: unknown = {};
+  try {
+    body = await res.json();
+  } catch {
+    body = {};
+  }
   if (!res.ok) {
-    throw new Error(body?.error?.message || res.statusText);
+    throw new Error(messageFromApiBody(body, res.statusText));
   }
-  if (body.success === false) {
-    throw new Error(body.error?.message || "Request failed");
+  const rec = body as Record<string, unknown>;
+  if (rec.success === false) {
+    throw new Error(messageFromApiBody(body, "Request failed"));
   }
-  return body.data as T;
+  return rec.data as T;
 }

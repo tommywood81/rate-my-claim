@@ -1,17 +1,30 @@
 """Application configuration loaded from environment variables."""
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, PostgresDsn, RedisDsn, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
+_REPO_ROOT = _BACKEND_DIR.parent
+
+
+def _env_files() -> tuple[str, ...]:
+    """Load .env from cwd, backend/, then repo root (later files override earlier)."""
+    paths: list[Path] = []
+    for candidate in (Path.cwd() / ".env", _BACKEND_DIR / ".env", _REPO_ROOT / ".env"):
+        if candidate.is_file() and candidate not in paths:
+            paths.append(candidate)
+    return tuple(str(p) for p in paths) if paths else (".env",)
 
 
 class Settings(BaseSettings):
     """Runtime configuration for the API and workers."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_env_files(),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -42,6 +55,24 @@ class Settings(BaseSettings):
 
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     openai_organization: str | None = Field(default=None, alias="OPENAI_ORG_ID")
+
+    openai_enforce_token_budgets: bool = Field(
+        default=True,
+        alias="OPENAI_ENFORCE_TOKEN_BUDGETS",
+        description="When true, enforce daily and per-scope token caps (dev safety).",
+    )
+    openai_max_tokens_per_day: int = Field(
+        default=200_000,
+        ge=0,
+        alias="OPENAI_MAX_TOKENS_PER_DAY",
+        description="Max OpenAI total_tokens per UTC day (0 = no daily cap).",
+    )
+    openai_max_tokens_per_claim_scope: int = Field(
+        default=80_000,
+        ge=0,
+        alias="OPENAI_MAX_TOKENS_PER_CLAIM_SCOPE",
+        description="Max total_tokens per logical scope (e.g. one enrichment job). 0 = no cap.",
+    )
 
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 1536

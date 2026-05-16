@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,9 +27,14 @@ async def search_claims(
     limit: Annotated[int, Query(ge=1, le=30)] = 15,
 ) -> SuccessEnvelope[list[ClaimListItemResponse]]:
     """Hybrid semantic + lexical search over approved claims."""
-    provider = get_ai_provider()
+    provider = get_ai_provider(budget_scope=f"search:{uuid4()}")
     vec, _ = await provider.generate_embedding(q)
     repo = HybridSearchRepository(db)
-    rows = await repo.hybrid_search(query_text=q, query_embedding=vec, limit=limit, settings=settings)
+    rows = await repo.hybrid_search(
+        query_text=q,
+        query_embedding=vec,
+        limit=limit,
+        settings=settings,
+    )
     data = [ClaimListItemResponse.model_validate(c) for c, _ in rows]
     return SuccessEnvelope(data=data, meta={"has_more": False})

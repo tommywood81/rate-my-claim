@@ -13,6 +13,7 @@ from app.models.claim import PendingClaim, ProcessingStatus
 from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.repositories.claims_repository import ClaimRepository
 from app.services.ai.factory import get_ai_provider
+from app.services.ai.token_budget import TokenBudgetExceeded
 from app.services.retrieval.url_fetch_service import UrlFetchService
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 async def _run_pipeline(pending_id: UUID) -> None:
     """Execute embedding, dedupe, canonicalization, retrieval, and verdict."""
     settings = get_settings()
-    provider = get_ai_provider()
+    provider = get_ai_provider(budget_scope=f"pending:{pending_id}")
     async with AsyncSessionLocal() as session:
         repo = ClaimRepository(session)
         ai_repo = AIAnalysisRepository(session)
@@ -52,7 +53,8 @@ async def _run_pipeline(pending_id: UUID) -> None:
                 sim = 1.0 - float(dist)
                 if sim >= settings.duplicate_vector_threshold:
                     dup_ids.append(str(claim.id))
-            for other, dist in await repo.vector_similar_pending(vec, limit=8, exclude_id=pending.id):
+            sim_rows = await repo.vector_similar_pending(vec, limit=8, exclude_id=pending.id)
+            for other, dist in sim_rows:
                 sim = 1.0 - float(dist)
                 if sim >= settings.duplicate_vector_threshold:
                     dup_ids.append(f"pending:{other.id}")
@@ -109,7 +111,8 @@ async def _run_pipeline(pending_id: UUID) -> None:
             lines: list[str] = []
             idx = 1
             for ev in evidence_ctx:
-                block = f"[claim-evidence id={ev.id}] {ev.title}: {(ev.summary or ev.cleaned_content or '')[:900]}"
+                excerpt = (ev.summary or ev.cleaned_content or "")[:900]
+                block = f"[claim-evidence id={ev.id}] {ev.title}: {excerpt}"
                 lines.append(f"{idx}. {block}")
                 line_map[idx] = {
                     "kind": "db_evidence",
@@ -155,6 +158,18 @@ async def _run_pipeline(pending_id: UUID) -> None:
             pending.ai_summary = summary
             pending.processing_status = ProcessingStatus.awaiting_moderation
             await session.commit()
+        except TokenBudgetExceeded as exc:
+            logger.warning(
+                "enrichment_token_budget",
+                extra={"pending_id": str(pending_id), "detail": str(exc)},
+            )
+            await session.rollback()
+            async with AsyncSessionLocal() as session2:
+                p2 = await session2.get(PendingClaim, pending_id)
+                if p2:
+                    p2.processing_status = ProcessingStatus.failed
+                    p2.error_message = f"OpenAI token budget exceeded: {exc}"
+                    await session2.commit()
         except Exception as exc:
             logger.exception("enrichment_failed", extra={"pending_id": str(pending_id)})
             await session.rollback()

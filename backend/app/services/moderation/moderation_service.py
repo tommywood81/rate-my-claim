@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.claim import Claim, ClaimRevision, ClaimStatus, PendingClaim, ProcessingStatus
+from app.models.claim import Claim, ClaimRevision, ClaimStatus, ProcessingStatus
 from app.models.evidence import Evidence, EvidenceSourceType, EvidenceStance
 from app.models.moderation import ModerationAction, ModerationActionType
 from app.repositories.ai_analysis_repository import AIAnalysisRepository
@@ -52,7 +52,13 @@ class ModerationService:
             )
         )
 
-    async def approve_pending(self, *, pending_id: UUID, actor_id: UUID, explanation: str | None) -> Claim:
+    async def approve_pending(
+        self,
+        *,
+        pending_id: UUID,
+        actor_id: UUID,
+        explanation: str | None,
+    ) -> Claim:
         """Promote pending submission to an approved claim with evidence."""
         pending = await self._claims.get_pending(pending_id)
         if pending is None:
@@ -77,7 +83,8 @@ class ModerationService:
             if row.analysis_type == "structured_verdict" and row.structured_payload:
                 try:
                     bundle = json.loads(row.structured_payload)
-                    controversy = float(bundle.get("verdict", {}).get("controversy_hint", 0.0) or 0.0)
+                    verdict = bundle.get("verdict", {}) or {}
+                    controversy = float(verdict.get("controversy_hint", 0.0) or 0.0)
                 except (json.JSONDecodeError, TypeError, ValueError):
                     continue
 
@@ -111,7 +118,7 @@ class ModerationService:
                     continue
 
         evidence_added = 0
-        provider = get_ai_provider()
+        provider = get_ai_provider(budget_scope=f"approve_pending:{pending_id}")
         if verdict_bundle:
             line_map_raw = verdict_bundle.get("line_map") or {}
             line_map: dict[int, dict] = {}
@@ -187,7 +194,10 @@ class ModerationService:
             payload={"claim_id": str(claim.id)},
         )
         await self._session.flush()
-        logger.info("claim_approved", extra={"claim_id": str(claim.id), "pending_id": str(pending_id)})
+        logger.info(
+            "claim_approved",
+            extra={"claim_id": str(claim.id), "pending_id": str(pending_id)},
+        )
 
         for row in analyses:
             if row.analysis_type in {"structured_verdict", "confidence_analysis"}:

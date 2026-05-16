@@ -8,20 +8,25 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import get_current_user
+from app.api.v1.deps import ModeratorUser, get_current_user, get_settings_dep
+from app.core.config import Settings
 from app.db.session import get_db
 from app.models.evidence import EvidenceStance
 from app.models.user import User
 from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.repositories.claims_repository import ClaimRepository
 from app.schemas.claims import (
+    AIAnalysisResponse,
     ClaimDetailResponse,
     ClaimListItemResponse,
     CreateClaimRequest,
+    EvidenceResponse,
     PendingClaimResponse,
     VoteRequest,
 )
 from app.schemas.common import CursorMeta, SuccessEnvelope
+from app.services.ai.factory import get_ai_provider
+from app.services.claim_analysis_service import add_structured_verdict_for_claim
 from app.utils.cursor import ClaimCursor, decode_cursor, encode_cursor
 from app.workers.celery_app import process_pending_claim
 
@@ -83,6 +88,32 @@ async def list_claims(
     )
 
 
+@router.post(
+    "/claims/{slug}/ai-analysis",
+    response_model=SuccessEnvelope[AIAnalysisResponse],
+)
+async def run_claim_ai_analysis(
+    slug: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _moderator: ModeratorUser,
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+) -> SuccessEnvelope[AIAnalysisResponse]:
+    """Run a structured verdict against the claim's evidence and store ai_analysis (moderators)."""
+    repo = ClaimRepository(db)
+    claim = await repo.load_claim_detail_bundle_by_slug(slug)
+    if claim is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    provider = get_ai_provider(budget_scope=f"claim:{claim.id}")
+    ai_repo = AIAnalysisRepository(db)
+    row = await add_structured_verdict_for_claim(
+        claim=claim,
+        provider=provider,
+        ai_repo=ai_repo,
+        settings=settings,
+    )
+    return SuccessEnvelope(data=AIAnalysisResponse.model_validate(row))
+
+
 @router.get("/claims/{slug}", response_model=SuccessEnvelope[ClaimDetailResponse])
 async def claim_detail(
     slug: str,
@@ -96,7 +127,6 @@ async def claim_detail(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
 
     sup, con, ctx = [], [], []
-    from app.schemas.claims import AIAnalysisResponse, EvidenceResponse
 
     for ev in claim.evidence_items:
         item = EvidenceResponse.model_validate(ev)

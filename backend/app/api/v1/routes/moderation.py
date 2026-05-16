@@ -26,11 +26,20 @@ async def moderation_queue(
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
     cursor: Annotated[str | None, Query()] = None,
 ) -> SuccessEnvelope[list[PendingClaimResponse]]:
-    """List submissions awaiting moderation (cursor by created_at)."""
+    """List submissions in the enrichment/moderation pipeline (excludes completed/rejected)."""
     cur = decode_cursor(cursor)
+    active = (
+        ProcessingStatus.submitted,
+        ProcessingStatus.embedding,
+        ProcessingStatus.duplicate_check,
+        ProcessingStatus.canonicalizing,
+        ProcessingStatus.enriching,
+        ProcessingStatus.awaiting_moderation,
+        ProcessingStatus.failed,
+    )
     stmt = (
         select(PendingClaim)
-        .where(PendingClaim.processing_status == ProcessingStatus.awaiting_moderation)
+        .where(PendingClaim.processing_status.in_([s.value for s in active]))
         .order_by(desc(PendingClaim.created_at), desc(PendingClaim.id))
     )
     if cur:

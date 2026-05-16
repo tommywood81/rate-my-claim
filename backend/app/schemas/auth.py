@@ -33,7 +33,7 @@ class UserPublicResponse(BaseModel):
 
     id: UUID
     username: str
-    email: EmailStr
+    email: str
     role: str
     reputation_score: float
 

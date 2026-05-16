@@ -15,6 +15,7 @@ from app.api.v1.router import api_router
 from app.api.v1.routes import health
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.services.ai.token_budget import TokenBudgetExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,31 @@ def create_app() -> FastAPI:
         if cid:
             response.headers["X-Request-ID"] = cid
         return response
+
+    @app.exception_handler(TokenBudgetExceeded)
+    async def openai_token_budget_handler(request: Request, exc: TokenBudgetExceeded):
+        """OpenAI usage caps (development safety)."""
+        logger.warning(
+            "openai_token_budget_http",
+            extra={"path": request.url.path, "detail": str(exc)},
+        )
+        return JSONResponse(
+            status_code=429,
+            content={
+                "success": False,
+                "error": {
+                    "code": "OPENAI_TOKEN_BUDGET_EXCEEDED",
+                    "message": "OpenAI token budget exceeded for this request or day. "
+                    "Raise limits or set OPENAI_ENFORCE_TOKEN_BUDGETS=false.",
+                    "details": {
+                        "kind": exc.kind,
+                        "limit": exc.limit,
+                        "used": exc.used,
+                        "estimated": exc.estimated,
+                    },
+                },
+            },
+        )
 
     @app.exception_handler(Exception)
     async def unhandled_exception(request: Request, exc: Exception):

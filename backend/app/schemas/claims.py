@@ -22,6 +22,7 @@ class PendingClaimResponse(BaseModel):
     canonical_candidate_text: str | None
     ai_summary: str | None
     duplicate_candidate_ids: list[str] | None
+    error_message: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

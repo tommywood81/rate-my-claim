@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+
+import { SiteAuthNav } from "@/components/site-auth-nav";
+
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -17,10 +20,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/" className="text-lg font-semibold tracking-tight text-[var(--accent)]">
                 Rate My Claim
               </a>
-              <nav className="flex gap-4 text-sm text-[var(--muted)]">
+              <nav className="flex flex-1 flex-wrap items-center gap-4 text-sm text-[var(--muted)]">
                 <a href="/claims">Browse</a>
                 <a href="/submit">Submit</a>
                 <a href="/moderation">Moderation</a>
+                <span className="hidden sm:inline sm:flex-1" aria-hidden />
+                <SiteAuthNav />
               </nav>
             </div>
           </header>
