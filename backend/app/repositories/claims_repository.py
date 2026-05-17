@@ -98,10 +98,10 @@ class ClaimRepository(RepositoryBase):
         self,
         *,
         raw_text: str,
-        user_id: UUID,
+        user_id: UUID | None,
         source_urls: list[str] | None,
     ) -> PendingClaim:
-        """Create a new pending submission."""
+        """Create a new pending submission (guest when user_id is None)."""
         pending = PendingClaim(
             raw_claim_text=raw_text,
             submitted_by=user_id,

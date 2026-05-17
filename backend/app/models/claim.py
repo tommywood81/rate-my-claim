@@ -105,8 +105,8 @@ class PendingClaim(Base, TimestampMixin):
     embedding_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
     embedding_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     embedding_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    submitted_by: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    submitted_by: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     processing_status: Mapped[ProcessingStatus] = mapped_column(
         String(40), nullable=False, default=ProcessingStatus.submitted

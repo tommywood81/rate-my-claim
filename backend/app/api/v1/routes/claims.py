@@ -5,11 +5,12 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import ModeratorUser, get_current_user, get_settings_dep
+from app.api.v1.deps import ModeratorUser, get_current_user, get_optional_current_user, get_settings_dep
 from app.core.config import Settings
+from app.core.csrf import generate_csrf_token, set_csrf_cookie
 from app.db.session import get_db
 from app.models.evidence import EvidenceStance
 from app.models.user import User
@@ -38,18 +39,29 @@ from app.workers.celery_app import process_pending_claim
 router = APIRouter(tags=["claims"])
 
 
+@router.get("/csrf", response_model=SuccessEnvelope[dict])
+async def issue_csrf_cookie(
+    response: Response,
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+) -> SuccessEnvelope[dict]:
+    """Issue CSRF cookie for browser forms (guest submit and authenticated sessions)."""
+    csrf = generate_csrf_token()
+    set_csrf_cookie(response, csrf, settings)
+    return SuccessEnvelope(data={}, meta={"csrf_token": csrf})
+
+
 @router.post("/pending-claims", response_model=SuccessEnvelope[PendingClaimResponse])
 async def submit_claim(
     body: CreateClaimRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User | None, Depends(get_optional_current_user)],
 ) -> SuccessEnvelope[PendingClaimResponse]:
-    """Queue a new claim for async enrichment."""
+    """Queue a new claim for async enrichment (guests and signed-in users)."""
     repo = ClaimRepository(db)
     normalized = normalize_claim_text(body.raw_claim_text)
     pending = await repo.create_pending(
         raw_text=normalized,
-        user_id=user.id,
+        user_id=user.id if user else None,
         source_urls=body.source_urls,
     )
     pending.normalized_claim_text = normalized
@@ -58,11 +70,23 @@ async def submit_claim(
         await platform.create_ingestion_job(pending_claim_id=pending.id, source_url=str(url))
     await IngestionPipelineAudit(db).log_submitted(
         pending_id=pending.id,
-        actor_id=user.id,
+        actor_id=user.id if user else None,
         source_url_count=len(body.source_urls or []),
+        anonymous=user is None,
     )
     process_pending_claim.delay(str(pending.id))
-    return SuccessEnvelope(data=PendingClaimResponse.model_validate(pending))
+    meta: dict[str, str | bool] = {"anonymous": user is None}
+    if user:
+        meta["submitted_by"] = str(user.id)
+        meta["message"] = (
+            "Claim queued. You can track this submission while signed in and resubmit after revision requests."
+        )
+    else:
+        meta["message"] = (
+            "Claim queued for moderation. Sign in to link future submissions to your account and "
+            "revise after moderator feedback."
+        )
+    return SuccessEnvelope(data=PendingClaimResponse.model_validate(pending), meta=meta)
 
 
 @router.get("/pending-claims/{pending_id}", response_model=SuccessEnvelope[PendingClaimResponse])
@@ -74,7 +98,7 @@ async def get_pending(
     """Return pending submission if owned by caller."""
     repo = ClaimRepository(db)
     pending = await repo.get_pending(pending_id)
-    if pending is None or pending.submitted_by != user.id:
+    if pending is None or pending.submitted_by is None or pending.submitted_by != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
     return SuccessEnvelope(data=PendingClaimResponse.model_validate(pending))
 
@@ -89,7 +113,7 @@ async def resubmit_pending(
     """Revise and re-queue a submission after moderator requested revision."""
     repo = ClaimRepository(db)
     pending = await repo.get_pending(pending_id)
-    if pending is None or pending.submitted_by != user.id:
+    if pending is None or pending.submitted_by is None or pending.submitted_by != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
     if ProcessingStatus(str(pending.processing_status)) != ProcessingStatus.revision_requested:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="not_revision_requested")
@@ -177,7 +201,16 @@ async def claim_detail(
             ctx.append(item)
 
     analyses = await ai_repo.list_for_target("claim", claim.id)
-    ai_out = [AIAnalysisResponse.model_validate(a) for a in analyses[:12]]
+    seen_types: set[str] = set()
+    deduped: list = []
+    for row in analyses:
+        if row.analysis_type in seen_types:
+            continue
+        seen_types.add(row.analysis_type)
+        deduped.append(row)
+        if len(deduped) >= 12:
+            break
+    ai_out = [AIAnalysisResponse.model_validate(a) for a in deduped]
 
     related = []
     if claim.embedding is not None:

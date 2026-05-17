@@ -43,13 +43,14 @@ class IngestionPipelineAudit:
         self,
         *,
         pending_id: UUID,
-        actor_id: UUID,
+        actor_id: UUID | None,
         source_url_count: int,
+        anonymous: bool = False,
     ) -> None:
         """User submitted a new pending claim."""
         await self.log_stage(
             pending_id=pending_id,
             stage="submitted",
             actor_id=actor_id,
-            details={"source_url_count": source_url_count},
+            details={"source_url_count": source_url_count, "anonymous": anonymous},
         )

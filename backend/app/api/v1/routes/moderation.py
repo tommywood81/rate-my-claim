@@ -101,9 +101,33 @@ async def moderation_action(
     svc = ModerationService(db)
     try:
         if body.action_type == "approve_claim" and body.target_type == "pending_claim":
-            claim = await svc.approve_pending(
-                pending_id=body.target_id, actor_id=user.id, explanation=body.explanation
-            )
+            force_dup = bool((body.payload or {}).get("force_duplicate"))
+            try:
+                claim = await svc.approve_pending(
+                    pending_id=body.target_id,
+                    actor_id=user.id,
+                    explanation=body.explanation,
+                    force_duplicate=force_dup,
+                )
+            except ValueError as exc:
+                code = str(exc)
+                if code.startswith("duplicate_of_claim:"):
+                    slug = code.split(":", 1)[1]
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=ErrorEnvelope(
+                            error=ErrorDetail(
+                                code="duplicate_of_existing_claim",
+                                message=(
+                                    f"This submission is very similar to an existing claim. "
+                                    f"Reject or merge instead of approving again. "
+                                    f"Similar claim: /claims/{slug}"
+                                ),
+                                details={"similar_slug": slug},
+                            )
+                        ).model_dump(),
+                    ) from exc
+                raise _moderation_error(exc) from exc
             return SuccessEnvelope(
                 data={"claim_id": str(claim.id), "slug": claim.public_slug}
             )

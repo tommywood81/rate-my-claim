@@ -62,6 +62,7 @@ class ModerationService:
         pending_id: UUID,
         actor_id: UUID,
         explanation: str | None,
+        force_duplicate: bool = False,
     ) -> Claim:
         """Promote pending submission to an approved claim with evidence."""
         pending = await self._claims.get_pending(pending_id)
@@ -69,6 +70,18 @@ class ModerationService:
             raise ValueError("pending_not_found")
         current = ProcessingStatus(str(pending.processing_status))
         assert_pending_transition(current, ProcessingStatus.completed)
+
+        if not force_duplicate:
+            for raw_id in pending.duplicate_candidate_ids or []:
+                if not isinstance(raw_id, str) or raw_id.startswith("pending:"):
+                    continue
+                try:
+                    existing_id = UUID(raw_id)
+                except ValueError:
+                    continue
+                existing = await self._claims.get_claim_by_id(existing_id)
+                if existing is not None:
+                    raise ValueError(f"duplicate_of_claim:{existing.public_slug}")
 
         canonical = pending.canonical_candidate_text or pending.raw_claim_text
         new_id = uuid4()
@@ -203,25 +216,30 @@ class ModerationService:
             extra={"claim_id": str(claim.id), "pending_id": str(pending_id)},
         )
 
+        imported_types: set[str] = set()
         for row in analyses:
-            if row.analysis_type in {"structured_verdict", "confidence_analysis"}:
-                payload = None
-                if row.structured_payload:
-                    try:
-                        payload = json.loads(row.structured_payload)
-                    except json.JSONDecodeError:
-                        payload = None
-                await self._ai.add_analysis(
-                    target_type="claim",
-                    target_id=claim.id,
-                    model_name=row.model_name,
-                    provider=row.provider,
-                    analysis_type=row.analysis_type,
-                    generated_text=row.generated_text,
-                    structured_payload=payload,
-                    confidence=row.confidence,
-                    created_by_job="approval_import",
-                )
+            if row.analysis_type not in {"structured_verdict", "confidence_analysis"}:
+                continue
+            if row.analysis_type in imported_types:
+                continue
+            imported_types.add(row.analysis_type)
+            payload = None
+            if row.structured_payload:
+                try:
+                    payload = json.loads(row.structured_payload)
+                except json.JSONDecodeError:
+                    payload = None
+            await self._ai.add_analysis(
+                target_type="claim",
+                target_id=claim.id,
+                model_name=row.model_name,
+                provider=row.provider,
+                analysis_type=row.analysis_type,
+                generated_text=row.generated_text,
+                structured_payload=payload,
+                confidence=row.confidence,
+                created_by_job="approval_import",
+            )
 
         return claim
 

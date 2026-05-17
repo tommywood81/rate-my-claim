@@ -215,6 +215,7 @@ async def test_moderation_revision_and_claim_lifecycle(
             "target_type": "pending_claim",
             "target_id": pending_id,
             "explanation": "Approved after revision",
+            "payload": {"force_duplicate": True},
         },
     )
     assert approve.status_code == 200, approve.text

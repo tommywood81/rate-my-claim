@@ -62,6 +62,23 @@ async def get_current_user(
     return user
 
 
+async def get_optional_current_user(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    token: Annotated[str | None, Depends(get_optional_token)],
+) -> User | None:
+    """Return authenticated user or None for public endpoints."""
+    if not token:
+        return None
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            return None
+        user_id = parse_uuid_subject(str(payload["sub"]))
+    except (JWTError, KeyError, ValueError):
+        return None
+    return await UserRepository(db).get_by_id(user_id)
+
+
 def require_roles(*roles: UserRole):
     """Factory enforcing RBAC."""
 
