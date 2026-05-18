@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from typing import Any
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -59,6 +60,10 @@ async def test_ingestion_pipeline_reaches_awaiting_moderation(
     monkeypatch.setattr(
         "app.workers.tasks.enrichment_tasks.get_ai_provider",
         lambda **kwargs: StubAIProvider(),
+    )
+    monkeypatch.setattr(
+        "app.services.evidence.ingestion_service.EvidenceIngestionService.process_pending_jobs",
+        AsyncMock(return_value=[]),
     )
     username = f"phase4_{os.getpid()}_{uuid4().hex[:6]}"
     password = "SeedDev!ChangeMe123"
@@ -136,6 +141,10 @@ async def test_moderation_revision_and_claim_lifecycle(
     monkeypatch.setattr(
         "app.services.moderation.moderation_service.get_ai_provider",
         lambda **kwargs: stub,
+    )
+    monkeypatch.setattr(
+        "app.services.evidence.ingestion_service.EvidenceIngestionService.process_pending_jobs",
+        AsyncMock(return_value=[]),
     )
     mod_password = os.environ.get("SEED_PASSWORD", "SeedDev!ChangeMe123")
     username = f"phase4_mod_{uuid4().hex[:6]}"

@@ -146,6 +146,9 @@ class Settings(BaseSettings):
 
     public_app_url: str = Field(default="http://localhost:8080", alias="PUBLIC_APP_URL")
 
+    evidence_chunk_size: int = Field(default=1200, ge=200, alias="EVIDENCE_CHUNK_SIZE")
+    evidence_chunk_overlap: int = Field(default=150, ge=0, alias="EVIDENCE_CHUNK_OVERLAP")
+
     duplicate_vector_threshold: float = Field(default=0.92, ge=0.0, le=1.0)
     hybrid_semantic_weight: float = 0.35
     hybrid_fts_weight: float = 0.25

@@ -33,3 +33,19 @@ def process_pending_claim(self, pending_id: str) -> None:
         run_pending_enrichment(pending_id)
     except Exception as exc:
         raise self.retry(exc=exc, countdown=30) from exc
+
+
+@celery_app.task(name="evidence.process_ingestion_job")
+def process_ingestion_job(job_id: str) -> None:
+    """Process one URL ingestion job into an evidence artifact."""
+    from app.workers.tasks.evidence_tasks import run_process_ingestion_job
+
+    run_process_ingestion_job(job_id)
+
+
+@celery_app.task(name="evidence.poll_rss_feeds")
+def poll_rss_feeds() -> int:
+    """Poll curated RSS feeds and ingest new articles."""
+    from app.workers.tasks.evidence_tasks import run_poll_rss_feeds
+
+    return run_poll_rss_feeds()

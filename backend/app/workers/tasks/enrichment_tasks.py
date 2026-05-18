@@ -19,7 +19,7 @@ from app.services.ingestion.canonicalization_service import CanonicalizationServ
 from app.services.ingestion.claim_normalization import normalize_claim_text
 from app.services.ingestion.duplicate_detection_service import DuplicateDetectionService
 from app.services.ingestion.pipeline_audit import IngestionPipelineAudit
-from app.services.retrieval.url_fetch_service import UrlFetchService
+from app.services.evidence.ingestion_service import EvidenceIngestionService
 
 logger = logging.getLogger(__name__)
 
@@ -109,20 +109,16 @@ async def _run_pipeline(pending_id: UUID) -> None:
             await session.flush()
             await audit.log_stage(pending_id=pending_id, stage="enriching")
 
-            fetcher = UrlFetchService()
+            ingestion_svc = EvidenceIngestionService(session)
+            artifacts = await ingestion_svc.process_pending_jobs(
+                pending_id,
+                provider=provider,
+                budget_scope=f"pending:{pending_id}",
+            )
             url_blocks: list[dict[str, str]] = []
-            urls = list(pending.source_urls or [])
-            for url in urls[:12]:
-                payload = await fetcher.fetch(str(url))
-                if payload.get("text"):
-                    url_blocks.append(
-                        {
-                            "url": str(url),
-                            "title": str(payload.get("title") or url),
-                            "text": str(payload.get("text"))[:4000],
-                            "publisher": str(payload.get("publisher") or ""),
-                        }
-                    )
+            for artifact in artifacts:
+                if artifact.cleaned_content:
+                    url_blocks.append(ingestion_svc.artifact_to_context_block(artifact))
 
             canonical = pending.canonical_candidate_text or pending.raw_claim_text
             evidence_ctx = await repo.evidence_for_similar_claims(vec, limit=24)

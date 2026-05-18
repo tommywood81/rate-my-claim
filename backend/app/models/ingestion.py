@@ -30,6 +30,15 @@ class IngestionJob(Base):
         PGUUID(as_uuid=True), ForeignKey("pending_claims.id", ondelete="CASCADE"), nullable=True
     )
     source_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(40), nullable=False, default="manual_url")
+    feed_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=True,
+    )
+    artifact_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=True,
+    )
     status: Mapped[IngestionJobStatus] = mapped_column(String(32), nullable=False, default=IngestionJobStatus.queued)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     result_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
