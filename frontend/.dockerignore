@@ -1,0 +1,29 @@
+# Dependencies — installed in image via pnpm (never copy host node_modules)
+node_modules
+.pnpm-store
+
+# Next.js build output
+.next
+out
+
+# Logs and caches
+npm-debug.log*
+pnpm-debug.log*
+.yarn
+.turbo
+*.tsbuildinfo
+
+# Git / IDE
+.git
+.gitignore
+.cursor
+.vscode
+*.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local env (compose injects env)
+.env
+.env.*

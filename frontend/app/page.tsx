@@ -1,16 +1,19 @@
 import Link from "next/link";
 
-async function fetchClaims() {
-  const res = await fetch(`${process.env.INTERNAL_API_URL || "http://127.0.0.1:8000"}/api/v1/claims?limit=8`, {
+import { SearchForm } from "@/components/search-form";
+import { serverGetEnvelope } from "@/lib/api-server";
+import type { ClaimListItem } from "@/lib/types";
+
+async function fetchRecentClaims(): Promise<ClaimListItem[]> {
+  const { data } = await serverGetEnvelope<ClaimListItem[]>("/api/v1/claims?limit=8", {
     next: { revalidate: 30 },
   });
-  if (!res.ok) return [];
-  const body = await res.json();
-  return body.data as { id: string; public_slug: string; canonical_claim_text: string; discovery_score: number }[];
+  return data;
 }
 
 export default async function Home() {
-  const claims = await fetchClaims();
+  const claims = await fetchRecentClaims();
+
   return (
     <div className="space-y-10">
       <section className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-6 shadow-sm">
@@ -19,35 +22,31 @@ export default async function Home() {
           Submit empirical claims, review evidence-backed analyses, and explore a durable claim graph. AI assists;
           evidence and moderation stay authoritative.
         </p>
-        <form className="mt-6 flex flex-col gap-2 sm:flex-row" action="/claims" method="get">
-          <input
-            name="q"
-            placeholder="Search claims…"
-            className="flex-1 rounded border border-[var(--border)] px-3 py-2"
-          />
-          <button
-            type="submit"
-            className="rounded bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-95"
-          >
-            Search
-          </button>
-        </form>
+        <SearchForm className="mt-6" />
       </section>
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Recent claims</h2>
-        <ul className="mt-3 divide-y divide-[var(--border)] rounded border border-[var(--border)] bg-[var(--card)]">
+
+      <section aria-labelledby="recent-claims-heading">
+        <h2 id="recent-claims-heading" className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+          Recent claims
+        </h2>
+        <ul className="mt-3 divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-sm">
           {claims.length === 0 && (
             <li className="px-4 py-6 text-sm text-[var(--muted)]">No public claims yet. Submit one to begin.</li>
           )}
           {claims.map((c) => (
             <li key={c.id} className="flex items-center justify-between gap-4 px-4 py-3">
-              <Link href={`/claims/${c.public_slug}`} className="font-medium text-[var(--fg)]">
+              <Link href={`/claims/${c.public_slug}`} className="font-medium text-[var(--fg)] hover:underline">
                 {c.canonical_claim_text}
               </Link>
-              <span className="text-xs text-[var(--muted)]">score {c.discovery_score}</span>
+              <span className="shrink-0 text-xs text-[var(--muted)]">score {c.discovery_score}</span>
             </li>
           ))}
         </ul>
+        <p className="mt-3 text-sm">
+          <Link href="/claims" className="text-[var(--accent)] underline">
+            Browse all claims
+          </Link>
+        </p>
       </section>
     </div>
   );

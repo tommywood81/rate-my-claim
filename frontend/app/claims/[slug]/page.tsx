@@ -1,28 +1,17 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+
+import { AiAnalysisList } from "@/components/ai-analysis-list";
+import { EvidenceList } from "@/components/evidence-list";
+import { serverGet } from "@/lib/api-server";
+import type { ClaimDetail } from "@/lib/types";
 
 import { ClaimAiAnalysisPanel } from "./claim-ai-panel";
 
-type Detail = {
-  canonical_claim_text: string;
-  public_slug: string;
-  confidence_score: number;
-  controversy_score: number;
-  evidence_score: number;
-  freshness_score: number;
-  evidence_supporting: { id: string; title: string; summary: string | null; stance: string }[];
-  evidence_contradicting: { id: string; title: string; summary: string | null; stance: string }[];
-  evidence_contextual: { id: string; title: string; summary: string | null; stance: string }[];
-  ai_analyses: { analysis_type: string; model_name: string; generated_text: string; created_at: string }[];
-};
-
 export const dynamic = "force-dynamic";
 
-async function load(slug: string) {
-  const base = process.env.INTERNAL_API_URL || "http://127.0.0.1:8000";
-  const res = await fetch(`${base}/api/v1/claims/${encodeURIComponent(slug)}`, { cache: "no-store" });
-  if (!res.ok) return null;
-  const body = await res.json();
-  return body.data as Detail;
+async function load(slug: string): Promise<ClaimDetail | null> {
+  return serverGet<ClaimDetail>(`/api/v1/claims/${encodeURIComponent(slug)}`, { cache: "no-store" });
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -40,81 +29,105 @@ export default async function ClaimPage({ params }: { params: Promise<{ slug: st
   const { slug } = await params;
   const d = await load(slug);
   if (!d) {
-    return <p className="text-sm text-[var(--muted)]">Claim not found.</p>;
+    return (
+      <p className="text-sm text-[var(--muted)]" role="status">
+        Claim not found.
+      </p>
+    );
   }
 
+  const totalEvidence =
+    d.evidence_supporting.length + d.evidence_contradicting.length + d.evidence_contextual.length;
+
   return (
-    <article className="space-y-8">
-      <header className="space-y-2">
-        <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Canonical claim</p>
-        <h1 className="text-2xl font-semibold leading-snug">{d.canonical_claim_text}</h1>
-        <dl className="grid gap-2 text-sm sm:grid-cols-4">
+    <article className="space-y-10">
+      <header className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Canonical claim</p>
+        <h1 className="text-2xl font-semibold leading-snug sm:text-3xl">{d.canonical_claim_text}</h1>
+        <dl className="grid gap-3 text-sm sm:grid-cols-4">
           <div>
             <dt className="text-[var(--muted)]">Confidence</dt>
-            <dd>{d.confidence_score.toFixed(2)}</dd>
+            <dd className="font-medium">{d.confidence_score.toFixed(2)}</dd>
           </div>
           <div>
             <dt className="text-[var(--muted)]">Controversy</dt>
-            <dd>{d.controversy_score.toFixed(2)}</dd>
+            <dd className="font-medium">{d.controversy_score.toFixed(2)}</dd>
           </div>
           <div>
-            <dt className="text-[var(--muted)]">Evidence</dt>
-            <dd>{d.evidence_score.toFixed(2)}</dd>
+            <dt className="text-[var(--muted)]">Evidence score</dt>
+            <dd className="font-medium">{d.evidence_score.toFixed(2)}</dd>
           </div>
           <div>
             <dt className="text-[var(--muted)]">Freshness</dt>
-            <dd>{d.freshness_score.toFixed(2)}</dd>
+            <dd className="font-medium">{d.freshness_score.toFixed(2)}</dd>
           </div>
         </dl>
+        {d.aliases.length > 0 && (
+          <p className="text-xs text-[var(--muted)]">
+            Also known as: {d.aliases.join(", ")}
+          </p>
+        )}
       </header>
 
-      <section className="space-y-3 rounded border border-[var(--border)] bg-[var(--card)] p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Evidence</h2>
-        <EvidenceBlock title="Supporting" items={d.evidence_supporting} />
-        <EvidenceBlock title="Contradicting" items={d.evidence_contradicting} />
-        <EvidenceBlock title="Contextual" items={d.evidence_contextual} />
+      <section
+        aria-labelledby="evidence-primary-heading"
+        className="space-y-6 rounded-lg border-2 border-[var(--accent)]/20 bg-[var(--card)] p-5 shadow-sm sm:p-6"
+      >
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="evidence-primary-heading" className="text-lg font-semibold text-[var(--fg)]">
+            Evidence
+          </h2>
+          <p className="text-sm text-[var(--muted)]">{totalEvidence} sources on record</p>
+        </div>
+        <p className="text-sm text-[var(--muted)]">
+          Primary material for this claim. Review sources, publishers, and retrieval dates before any AI summary.
+        </p>
+        <div className="space-y-8">
+          <EvidenceList title="Supporting" items={d.evidence_supporting} variant="prominent" />
+          <EvidenceList title="Contradicting" items={d.evidence_contradicting} variant="prominent" />
+          <EvidenceList title="Contextual" items={d.evidence_contextual} variant="prominent" />
+          {totalEvidence === 0 && (
+            <p className="text-sm text-[var(--muted)]">No evidence artifacts linked yet.</p>
+          )}
+        </div>
       </section>
 
-      <section className="space-y-3 rounded border border-dashed border-[var(--border)] bg-[#faf9f6] p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-          AI-assisted analysis (non-canonical)
-        </h2>
-        <ul className="space-y-3 text-sm">
-          {d.ai_analyses.map((a, i) => (
-            <li key={`${a.analysis_type}-${i}-${a.created_at}`} className="border-l-2 border-[var(--accent)] pl-3">
-              <p className="text-xs text-[var(--muted)]">
-                {a.analysis_type} · {a.model_name} · {new Date(a.created_at).toLocaleString()}
-              </p>
-              <p className="mt-1 whitespace-pre-wrap">{a.generated_text}</p>
-            </li>
-          ))}
-          {d.ai_analyses.length === 0 && <li className="text-[var(--muted)]">No AI analyses stored for this claim.</li>}
-        </ul>
+      {d.related_slugs.length > 0 && (
+        <section aria-labelledby="related-heading" className="text-sm">
+          <h2 id="related-heading" className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Related claims
+          </h2>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {d.related_slugs.map((s) => (
+              <li key={s}>
+                <Link
+                  href={`/claims/${s}`}
+                  className="rounded-full border border-[var(--border)] bg-white px-3 py-1 text-[var(--accent)] hover:underline"
+                >
+                  {s}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <aside
+        aria-labelledby="ai-panel-heading"
+        className="space-y-4 rounded-lg border border-dashed border-[var(--border)] bg-[#faf9f6] p-5"
+      >
+        <header>
+          <h2 id="ai-panel-heading" className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+            AI-assisted analysis
+          </h2>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+            Non-canonical summaries. Each entry shows provider, model, and generation time. Do not treat as primary
+            evidence.
+          </p>
+        </header>
+        <AiAnalysisList items={d.ai_analyses} />
         <ClaimAiAnalysisPanel slug={slug} />
-      </section>
+      </aside>
     </article>
-  );
-}
-
-function EvidenceBlock({
-  title,
-  items,
-}: {
-  title: string;
-  items: { id: string; title: string; summary: string | null; stance: string }[];
-}) {
-  if (!items.length) return null;
-  return (
-    <div>
-      <h3 className="text-xs font-semibold uppercase text-[var(--muted)]">{title}</h3>
-      <ul className="mt-2 space-y-2">
-        {items.map((e) => (
-          <li key={e.id} className="rounded border border-[var(--border)] bg-white p-3">
-            <p className="font-medium">{e.title}</p>
-            {e.summary && <p className="mt-1 text-sm text-[var(--muted)]">{e.summary}</p>}
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }

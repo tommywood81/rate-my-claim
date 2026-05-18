@@ -1,12 +1,15 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-type Claim = {
-  id: string;
-  public_slug: string;
-  canonical_claim_text: string;
-  confidence_score: number;
-  discovery_score: number;
-  scores?: { final_score: number };
+import { ClaimSearchHit } from "@/components/claim-search-hit";
+import { SearchForm } from "@/components/search-form";
+import { serverGetEnvelope } from "@/lib/api-server";
+import type { ClaimListItem, CursorMeta } from "@/lib/types";
+
+export const metadata: Metadata = {
+  title: "Browse claims",
+  description: "Browse and filter published claims on Rate My Claim.",
 };
 
 export default async function BrowseClaimsPage({
@@ -15,44 +18,52 @@ export default async function BrowseClaimsPage({
   searchParams: Promise<{ q?: string; cursor?: string }>;
 }) {
   const sp = await searchParams;
-  const base = process.env.INTERNAL_API_URL || "http://127.0.0.1:8000";
-  const params = new URLSearchParams({ limit: "20" });
-  if (sp.q) params.set("q", sp.q);
-  if (sp.cursor) params.set("cursor", sp.cursor);
-  const url = sp.q
-    ? `${base}/api/v1/search/claims?${params}`
-    : `${base}/api/v1/claims?limit=20`;
-  const res = await fetch(url, { next: { revalidate: 15 } });
-  const body = res.ok ? await res.json() : { data: [], meta: {} };
-  const claims = (body.data || []) as Claim[];
-  const meta = (body.meta || {}) as { has_more?: boolean; next_cursor?: string };
+
+  if (sp.q?.trim()) {
+    const params = new URLSearchParams({ q: sp.q.trim() });
+    if (sp.cursor) params.set("cursor", sp.cursor);
+    redirect(`/search?${params}`);
+  }
+
+  const { data: claims, meta: rawMeta } = await serverGetEnvelope<ClaimListItem[]>(
+    "/api/v1/claims?limit=20",
+    { next: { revalidate: 15 } },
+  );
+  const meta = rawMeta as CursorMeta;
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">{sp.q ? `Search: ${sp.q}` : "Browse claims"}</h1>
-      <ul className="divide-y divide-[var(--border)] rounded border border-[var(--border)] bg-[var(--card)]">
+    <div className="space-y-6">
+      <header className="space-y-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Browse claims</h1>
+        <p className="text-sm text-[var(--muted)]">
+          Published claims ordered by discovery. Use{" "}
+          <Link href="/search" className="underline">
+            search
+          </Link>{" "}
+          for hybrid semantic ranking.
+        </p>
+      </header>
+
+      <SearchForm action="/search" />
+
+      <ul className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-sm">
         {claims.map((c) => (
-          <li key={c.id} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <Link href={`/claims/${c.public_slug}`} className="font-medium">
-              {c.canonical_claim_text}
-            </Link>
-            <div className="text-xs text-[var(--muted)]">
-              conf {c.confidence_score.toFixed(2)} · discovery {c.discovery_score}
-              {c.scores?.final_score != null && (
-                <> · relevance {c.scores.final_score.toFixed(2)}</>
-              )}
-            </div>
+          <li key={c.id}>
+            <ClaimSearchHit claim={c} />
           </li>
         ))}
-        {claims.length === 0 && <li className="px-4 py-6 text-sm text-[var(--muted)]">No results.</li>}
+        {claims.length === 0 && (
+          <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">No public claims yet.</li>
+        )}
       </ul>
-      {sp.q && meta.has_more && meta.next_cursor && (
+
+      {meta.has_more && meta.next_cursor && (
         <p className="text-sm">
           <Link
-            href={`/claims?q=${encodeURIComponent(sp.q)}&cursor=${encodeURIComponent(meta.next_cursor)}`}
-            className="text-[var(--accent)] underline"
+            href={`/claims?cursor=${encodeURIComponent(String(meta.next_cursor))}`}
+            className="font-medium text-[var(--accent)] underline"
           >
-            Load more results
+            Load more
           </Link>
         </p>
       )}
