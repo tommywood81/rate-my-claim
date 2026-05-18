@@ -26,8 +26,12 @@ class BaseAIProvider(ABC):
         """Return stance label: supports | contradicts | contextualizes."""
 
     @abstractmethod
-    async def detect_duplicates_llm(self, claim: str, candidates: list[str]) -> list[int]:
+    async def detect_duplicates(self, claim: str, candidates: list[str]) -> list[int]:
         """Return indices of candidates considered likely duplicates."""
+
+    async def detect_duplicates_llm(self, claim: str, candidates: list[str]) -> list[int]:
+        """Backward-compatible alias for ``detect_duplicates``."""
+        return await self.detect_duplicates(claim, candidates)
 
     @abstractmethod
     async def analyze_contradictions(self, claim: str, evidence_blocks: str) -> str:

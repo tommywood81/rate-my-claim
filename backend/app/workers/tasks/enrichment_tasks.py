@@ -13,6 +13,7 @@ from app.models.claim import PendingClaim, ProcessingStatus
 from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.repositories.claims_repository import ClaimRepository
 from app.services.ai.factory import get_ai_provider
+from app.services.ai.idempotency import enrichment_task_lock
 from app.services.ai.token_budget import TokenBudgetExceeded
 from app.services.ingestion.canonicalization_service import CanonicalizationService
 from app.services.ingestion.claim_normalization import normalize_claim_text
@@ -209,7 +210,11 @@ async def _run_pipeline(pending_id: UUID) -> None:
 
 async def enrich_pending_claim_async(pending_id: UUID | str) -> None:
     """Async entrypoint for tests and in-process callers."""
-    await _run_pipeline(UUID(str(pending_id)))
+    pid = UUID(str(pending_id))
+    async with enrichment_task_lock(pid) as acquired:
+        if not acquired:
+            return
+        await _run_pipeline(pid)
 
 
 def run_pending_enrichment(pending_id: str) -> None:

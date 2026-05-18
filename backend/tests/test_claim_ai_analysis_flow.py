@@ -34,7 +34,7 @@ class StubAIProvider(BaseAIProvider):
     async def classify_stance(self, claim: str, evidence_excerpt: str) -> str:
         return "contextualizes"
 
-    async def detect_duplicates_llm(self, claim: str, candidates: list[str]) -> list[int]:
+    async def detect_duplicates(self, claim: str, candidates: list[str]) -> list[int]:
         return []
 
     async def analyze_contradictions(self, claim: str, evidence_blocks: str) -> str:

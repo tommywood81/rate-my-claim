@@ -81,7 +81,28 @@ class Settings(BaseSettings):
     ai_model_cheap: str = "gpt-4o-mini"
     ai_model_reasoning: str = "gpt-4o-mini"
 
+    ai_provider: Literal["openai", "ollama"] = Field(
+        default="openai",
+        alias="AI_PROVIDER",
+        description="Primary AI backend: openai or ollama.",
+    )
+    ai_cache_enabled: bool = Field(default=True, alias="AI_CACHE_ENABLED")
+    ai_cache_ttl_seconds: int = Field(default=86400, ge=60, alias="AI_CACHE_TTL_SECONDS")
+    ai_retry_max_attempts: int = Field(default=3, ge=1, le=8, alias="AI_RETRY_MAX_ATTEMPTS")
+    ai_retry_base_delay_seconds: float = Field(
+        default=1.0,
+        ge=0.1,
+        alias="AI_RETRY_BASE_DELAY_SECONDS",
+    )
+    ai_track_cost_usd: bool = Field(
+        default=True,
+        alias="AI_TRACK_COST_USD",
+        description="Accumulate estimated OpenAI spend in Redis (dev observability).",
+    )
+
     ollama_base_url: str | None = Field(default=None, alias="OLLAMA_BASE_URL")
+    ollama_chat_model: str = Field(default="llama3.2", alias="OLLAMA_CHAT_MODEL")
+    ollama_embed_model: str = Field(default="nomic-embed-text", alias="OLLAMA_EMBED_MODEL")
 
     cors_origins: str = Field(
         default="http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000",

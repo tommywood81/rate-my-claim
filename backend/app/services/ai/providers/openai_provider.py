@@ -9,7 +9,9 @@ from typing import Any
 from openai import AsyncOpenAI
 
 from app.core.config import get_settings
+from app.services.ai.cost_tracking import record_cost_from_response
 from app.services.ai.providers.base import BaseAIProvider
+from app.services.ai.routing import model_for_operation
 from app.services.ai.token_budget import budget_chat_call, budget_embedding_call
 
 logger = logging.getLogger(__name__)
@@ -73,6 +75,12 @@ class OpenAIProvider(BaseAIProvider):
             completion_reserve=3072,
             call=call,
         )
+        await record_cost_from_response(
+            scope_key=self._budget_scope,
+            model=model,
+            response=completion,
+            settings=self._settings,
+        )
         content = completion.choices[0].message.content or "{}"
         try:
             return json.loads(content)
@@ -89,16 +97,19 @@ class OpenAIProvider(BaseAIProvider):
             "rejection_reason (string or null if acceptable). "
             "Reject vague, ideological, or non-falsifiable claims with rejection_reason."
         )
-        return await self._chat_json(system, raw_text, model=self._settings.ai_model_cheap)
+        model = model_for_operation(self._settings, "canonicalize_claim")
+        return await self._chat_json(system, raw_text, model=model)
 
     async def summarize_evidence(self, context: str) -> str:
         """Summarize only what is explicitly present in context."""
         system = "Summarize retrieved evidence in <=120 words. Do not invent sources."
         user = context[:12000]
 
+        model = model_for_operation(self._settings, "summarize_evidence")
+
         async def call() -> Any:
             return await self._client.chat.completions.create(
-                model=self._settings.ai_model_cheap,
+                model=model,
                 temperature=0.2,
                 messages=[
                     {"role": "system", "content": system},
@@ -114,6 +125,12 @@ class OpenAIProvider(BaseAIProvider):
             completion_reserve=512,
             call=call,
         )
+        await record_cost_from_response(
+            scope_key=self._budget_scope,
+            model=model,
+            response=completion,
+            settings=self._settings,
+        )
         return (completion.choices[0].message.content or "").strip()
 
     async def classify_stance(self, claim: str, evidence_excerpt: str) -> str:
@@ -122,17 +139,18 @@ class OpenAIProvider(BaseAIProvider):
             'Classify relationship of excerpt to claim. '
             'JSON: {"stance":"supports|contradicts|contextualizes"}'
         )
+        model = model_for_operation(self._settings, "classify_stance")
         data = await self._chat_json(
             system,
             f"Claim: {claim}\nExcerpt: {evidence_excerpt}",
-            model=self._settings.ai_model_cheap,
+            model=model,
         )
         stance = str(data.get("stance", "contextualizes")).lower()
         if stance not in {"supports", "contradicts", "contextualizes"}:
             return "contextualizes"
         return stance
 
-    async def detect_duplicates_llm(self, claim: str, candidates: list[str]) -> list[int]:
+    async def detect_duplicates(self, claim: str, candidates: list[str]) -> list[int]:
         """Ask model which candidates are duplicates; conservative."""
         if not candidates:
             return []
@@ -141,10 +159,11 @@ class OpenAIProvider(BaseAIProvider):
             "Given a claim and numbered candidate claims, return JSON "
             '{"duplicate_indices":[int,...]} only for near-duplicate meaning, else empty.'
         )
+        model = model_for_operation(self._settings, "detect_duplicates")
         data = await self._chat_json(
             system,
             f"Claim:\n{claim}\nCandidates:\n{numbered}",
-            model=self._settings.ai_model_cheap,
+            model=model,
         )
         raw = data.get("duplicate_indices", [])
         out: list[int] = []
@@ -162,9 +181,11 @@ class OpenAIProvider(BaseAIProvider):
         )
         user = f"Claim: {claim}\nBlocks:\n{evidence_blocks[:14000]}"
 
+        model = model_for_operation(self._settings, "analyze_contradictions")
+
         async def call() -> Any:
             return await self._client.chat.completions.create(
-                model=self._settings.ai_model_reasoning,
+                model=model,
                 temperature=0.2,
                 messages=[
                     {"role": "system", "content": system},
@@ -180,6 +201,12 @@ class OpenAIProvider(BaseAIProvider):
             completion_reserve=1024,
             call=call,
         )
+        await record_cost_from_response(
+            scope_key=self._budget_scope,
+            model=model,
+            response=completion,
+            settings=self._settings,
+        )
         return (completion.choices[0].message.content or "").strip()
 
     async def generate_confidence_analysis(
@@ -193,10 +220,11 @@ class OpenAIProvider(BaseAIProvider):
             "JSON keys: aggregate (0-1), evidence_quality, source_credibility, "
             "evidence_consistency, freshness, rationale (string)."
         )
+        model = model_for_operation(self._settings, "generate_confidence_analysis")
         return await self._chat_json(
             system,
             f"Claim: {claim}\nDigest:\n{evidence_digest[:12000]}",
-            model=self._settings.ai_model_reasoning,
+            model=model,
         )
 
     async def structured_verdict(self, claim: str, retrieved_context: str) -> dict[str, Any]:
@@ -210,8 +238,9 @@ class OpenAIProvider(BaseAIProvider):
             '"controversy_hint": number '
             "}. Never invent URLs or studies not present in CONTEXT."
         )
+        model = model_for_operation(self._settings, "structured_verdict")
         return await self._chat_json(
             system,
             f"CLAIM:\n{claim}\n\nCONTEXT:\n{retrieved_context[:16000]}",
-            model=self._settings.ai_model_reasoning,
+            model=model,
         )
