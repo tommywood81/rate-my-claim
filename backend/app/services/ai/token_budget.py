@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 import redis.asyncio as redis
 
 from app.core.config import Settings, get_settings
+from app.core.metrics import record_ai_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,12 @@ async def record_token_usage(*, scope_key: str, actual_tokens: int) -> None:
         pipe.incrby(scope_k, actual_tokens)
         pipe.expire(scope_k, 2592000)
         await pipe.execute()
+        record_ai_tokens(
+            provider="openai",
+            operation="usage",
+            model="aggregate",
+            tokens=actual_tokens,
+        )
         logger.info(
             "openai_token_usage_recorded",
             extra={"scope": scope_key[:80], "tokens": actual_tokens},

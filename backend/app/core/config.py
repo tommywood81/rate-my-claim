@@ -162,6 +162,17 @@ class Settings(BaseSettings):
     hybrid_relationship_weight: float = 0.05
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    log_json: bool = Field(default=True, alias="LOG_JSON")
+
+    otel_enabled: bool = Field(default=False, alias="OTEL_ENABLED")
+    otel_service_name: str = Field(default="rate-my-claim-api", alias="OTEL_SERVICE_NAME")
+    otel_environment: str = Field(default="development", alias="OTEL_ENVIRONMENT")
+    otel_exporter_endpoint: str = Field(
+        default="http://otel-collector:4318/v1/traces",
+        alias="OTEL_EXPORTER_OTLP_ENDPOINT",
+    )
+
+    app_version: str = Field(default="0.1.0", alias="APP_VERSION")
 
     @computed_field  # type: ignore[prop-decorator]
     @property

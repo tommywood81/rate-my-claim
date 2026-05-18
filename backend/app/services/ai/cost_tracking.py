@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 import redis.asyncio as redis
 
 from app.core.config import Settings, get_settings
+from app.core.metrics import record_ai_cost
 from app.services.ai.token_budget import utc_date_key
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,7 @@ async def record_cost_usd(
         pipe.incrbyfloat(scope_k, cost_usd)
         pipe.expire(scope_k, 2592000)
         await pipe.execute()
+        record_ai_cost(provider="openai", model=model, cost_usd=cost_usd)
         logger.info(
             "openai_cost_recorded",
             extra={"scope": scope_key[:80], "model": model, "cost_usd": cost_usd},

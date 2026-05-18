@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.claim import Claim, ClaimRevision, ClaimStatus, ProcessingStatus
 from app.models.evidence import Evidence, EvidenceSourceType, EvidenceStance
 from app.models.moderation import ModerationAction, ModerationActionType
+from app.core.metrics import record_moderation
 from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.repositories.claims_repository import ClaimRepository
 from app.services.ai.factory import get_ai_provider
@@ -55,6 +56,10 @@ class ModerationService:
                 created_at=datetime.now(tz=UTC),
             )
         )
+        action_name = (
+            action_type.value if hasattr(action_type, "value") else str(action_type)
+        )
+        record_moderation(action_name)
 
     async def approve_pending(
         self,

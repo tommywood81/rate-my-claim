@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import func, or_, select
 
+from app.core.metrics import observe_vector_query
 from app.models.claim import Claim, ClaimRelationship
 from app.repositories.base import RepositoryBase
 
@@ -62,7 +63,8 @@ class SearchRepository(RepositoryBase):
         if min_confidence is not None:
             stmt = stmt.where(Claim.confidence_score >= min_confidence)
 
-        rows = (await self._session.execute(stmt)).all()
+        with observe_vector_query("hybrid_search"):
+            rows = (await self._session.execute(stmt)).all()
         return [
             (
                 row[0],

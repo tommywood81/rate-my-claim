@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.orm import selectinload
 
+from app.core.metrics import observe_vector_query
 from app.models.claim import Claim, ClaimRelationship, ClaimVote, PendingClaim, ProcessingStatus
 from app.models.evidence import Evidence
 from app.repositories.base import RepositoryBase
@@ -64,7 +65,8 @@ class ClaimRepository(RepositoryBase):
         )
         if exclude_id:
             stmt = stmt.where(Claim.id != exclude_id)
-        rows = (await self._session.execute(stmt)).all()
+        with observe_vector_query("similar_claims"):
+            rows = (await self._session.execute(stmt)).all()
         return [(c, float(d)) for c, d in rows]
 
     async def vector_similar_pending(
@@ -80,7 +82,8 @@ class ClaimRepository(RepositoryBase):
         )
         if exclude_id:
             stmt = stmt.where(PendingClaim.id != exclude_id)
-        rows = (await self._session.execute(stmt)).all()
+        with observe_vector_query("similar_pending"):
+            rows = (await self._session.execute(stmt)).all()
         return [(p, float(d)) for p, d in rows]
 
     async def get_pending(self, pending_id: UUID) -> PendingClaim | None:

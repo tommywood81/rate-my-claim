@@ -1,0 +1,107 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "API request rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{handler!=\"/metrics\"}[5m]))",
+          "legendFormat": "requests/s"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "title": "AI tokens / min",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(rmc_ai_tokens_total[5m])) * 60",
+          "legendFormat": "tokens/min"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "id": 3,
+      "title": "AI cache hit ratio",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "sum(rate(rmc_ai_cache_total{result=\"hit\"}[15m])) / clamp_min(sum(rate(rmc_ai_cache_total[15m])), 0.001)"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "id": 4,
+      "title": "Search cache hit ratio",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "sum(rate(rmc_search_cache_total{result=\"hit\"}[15m])) / clamp_min(sum(rate(rmc_search_cache_total[15m])), 0.001)"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "id": 5,
+      "title": "Vector query p95 (s)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(rmc_vector_query_duration_seconds_bucket[5m])) by (le))"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 6,
+      "title": "Moderation throughput",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(rmc_moderation_actions_total[5m])) by (action_type)",
+          "legendFormat": "{{action_type}}"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 7,
+      "title": "Celery queue depth",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rmc_celery_queue_depth",
+          "legendFormat": "{{queue}}"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["rate-my-claim"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "Rate My Claim — Operations",
+  "uid": "rmc-ops",
+  "version": 1
+}

@@ -9,6 +9,7 @@ import logging
 import redis.asyncio as redis
 
 from app.core.config import Settings
+from app.core.metrics import record_search_cache
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +38,13 @@ async def get_ranked_ids(settings: Settings, key: str) -> list[dict[str, object]
     try:
         raw = await client.get(key)
         if raw is None:
+            record_search_cache(hit=False)
             return None
         data = json.loads(raw)
         if isinstance(data, list):
+            record_search_cache(hit=True)
             return data
+        record_search_cache(hit=False)
         return None
     finally:
         await client.aclose()

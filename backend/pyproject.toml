@@ -35,6 +35,13 @@ dependencies = [
     "email-validator>=2.2.0",
     "python-slugify>=8.0.0",
     "feedparser>=6.0.0",
+    "opentelemetry-api>=1.29.0",
+    "opentelemetry-sdk>=1.29.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.29.0",
+    "opentelemetry-instrumentation-fastapi>=0.50b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.50b0",
+    "opentelemetry-instrumentation-redis>=0.50b0",
+    "opentelemetry-instrumentation-httpx>=0.50b0",
 ]
 
 [project.optional-dependencies]
@@ -74,7 +81,14 @@ disallow_untyped_defs = true
 disallow_any_generics = true
 
 [[tool.mypy.overrides]]
-module = ["celery.*", "passlib.*", "jose.*", "trafilatura.*"]
+module = [
+    "celery.*",
+    "passlib.*",
+    "jose.*",
+    "trafilatura.*",
+    "opentelemetry.*",
+    "prometheus_client.*",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
