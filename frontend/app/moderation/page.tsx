@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  ModerationRowTokenHint,
+  ModerationTokenEstimator,
+} from "@/components/moderation-token-estimator";
 import { apiFetch } from "@/lib/api";
 
 type Pending = {
@@ -10,6 +14,7 @@ type Pending = {
   error_message?: string | null;
   ai_summary?: string | null;
   duplicate_candidate_ids?: string[] | null;
+  source_urls?: string[] | null;
   created_at: string;
 };
 
@@ -157,13 +162,24 @@ export default function ModerationPage() {
         </p>
       )}
       {loadState === "authorized" && (
-        <p className="text-sm text-[var(--muted)]">
-          Submissions appear here as soon as they are queued. <strong>Approve</strong> is only available when the
-          background worker has finished enrichment and status is <code className="text-xs">awaiting_moderation</code>
-          . You can <strong>Reject</strong> earlier if needed. If a row stays in{" "}
-          <code className="text-xs">submitted</code> or <code className="text-xs">failed</code>, check that the Celery
-          worker is running and that <code className="text-xs">OPENAI_API_KEY</code> is set for AI steps.
-        </p>
+        <>
+          <p className="text-sm text-[var(--muted)]">
+            Submissions appear here as soon as they are queued. <strong>Approve</strong> is only available when the
+            background worker has finished enrichment and status is{" "}
+            <code className="text-xs">awaiting_moderation</code>. You can <strong>Reject</strong> earlier if needed. If
+            a row stays in <code className="text-xs">submitted</code> or <code className="text-xs">failed</code>, check
+            that the Celery worker is running and that <code className="text-xs">OPENAI_API_KEY</code> is set for AI
+            steps.
+          </p>
+          <ModerationTokenEstimator
+            rows={rows.map((p) => ({
+              id: p.id,
+              rawClaimText: p.raw_claim_text,
+              sourceUrlCount: p.source_urls?.length ?? 0,
+              processingStatus: p.processing_status,
+            }))}
+          />
+        </>
       )}
       {err && <p className="text-sm text-red-700">{err}</p>}
       <ul className="divide-y divide-[var(--border)] rounded border border-[var(--border)] bg-[var(--card)]">
@@ -175,6 +191,11 @@ export default function ModerationPage() {
             <p className="text-xs text-[var(--muted)]">
               {p.id} · <span className="font-medium text-[var(--fg)]">{p.processing_status}</span> ·{" "}
               {new Date(p.created_at).toLocaleString()}
+              {" · "}
+              <ModerationRowTokenHint
+                rawClaimText={p.raw_claim_text}
+                sourceUrlCount={p.source_urls?.length ?? 0}
+              />
             </p>
             <p className="text-sm">{p.raw_claim_text}</p>
             {p.ai_summary && (

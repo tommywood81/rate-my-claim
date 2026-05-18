@@ -29,6 +29,7 @@ class PendingClaimResponse(BaseModel):
     canonical_candidate_text: str | None
     ai_summary: str | None
     duplicate_candidate_ids: list[str] | None
+    source_urls: list[str] | None = None
     error_message: str | None = None
     created_at: datetime
 
