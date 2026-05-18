@@ -20,8 +20,16 @@ from app.services.moderation.state_machine import (
     assert_claim_status_transition,
     assert_pending_transition,
 )
-from app.workers.tasks.enrichment_tasks import enrich_pending_claim_async
 from tests.test_claim_ai_analysis_flow import StubAIProvider
+
+from uuid import UUID
+
+
+async def _enrich_pending_for_test(pending_id: str) -> None:
+    """Run enrichment in-process (bypasses Celery Redis lock contention in parallel tests)."""
+    from app.workers.tasks.enrichment_tasks import _run_pipeline
+
+    await _run_pipeline(UUID(str(pending_id)))
 
 _SKIP = os.environ.get("RUN_PG_INTEGRATION") != "1"
 _SKIP_REASON = "Set RUN_PG_INTEGRATION=1 with DATABASE_URL and Redis for Phase 4 tests"
@@ -94,7 +102,7 @@ async def test_ingestion_pipeline_reaches_awaiting_moderation(
     assert submit.status_code == 200, submit.text
     pending_id = submit.json()["data"]["id"]
 
-    await enrich_pending_claim_async(pending_id)
+    await _enrich_pending_for_test(pending_id)
 
     status = await async_client.get(
         f"/api/v1/pending-claims/{pending_id}",
@@ -146,6 +154,7 @@ async def test_moderation_revision_and_claim_lifecycle(
         "app.services.evidence.ingestion_service.EvidenceIngestionService.process_pending_jobs",
         AsyncMock(return_value=[]),
     )
+
     mod_password = os.environ.get("SEED_PASSWORD", "SeedDev!ChangeMe123")
     username = f"phase4_mod_{uuid4().hex[:6]}"
     password = "SeedDev!ChangeMe123"
@@ -163,16 +172,20 @@ async def test_moderation_revision_and_claim_lifecycle(
     )
     user_csrf = user_login.cookies.get("rmc_csrf", "")
 
+    unique_claim = (
+        f"Phase4 moderation lifecycle unique claim {uuid4()} "
+        "for deterministic integration testing."
+    )
     submit = await async_client.post(
         "/api/v1/pending-claims",
         headers={"X-CSRF-Token": user_csrf} if user_csrf else {},
         json={
-            "raw_claim_text": "Vitamin D supplementation may reduce seasonal illness incidence in adults.",
+            "raw_claim_text": unique_claim,
             "source_urls": [],
         },
     )
     pending_id = submit.json()["data"]["id"]
-    await enrich_pending_claim_async(pending_id)
+    await _enrich_pending_for_test(pending_id)
 
     mod_login = await async_client.post(
         "/api/v1/auth/login",
@@ -203,12 +216,12 @@ async def test_moderation_revision_and_claim_lifecycle(
         f"/api/v1/pending-claims/{pending_id}",
         headers={"X-CSRF-Token": user_csrf2} if user_csrf2 else {},
         json={
-            "raw_claim_text": "Vitamin D supplementation may reduce seasonal illness incidence in healthy adults.",
+            "raw_claim_text": f"{unique_claim} (revised for healthy adults cohort).",
             "source_urls": [],
         },
     )
     assert patch.status_code == 200
-    await enrich_pending_claim_async(pending_id)
+    await _enrich_pending_for_test(pending_id)
 
     mod_login2 = await async_client.post(
         "/api/v1/auth/login",

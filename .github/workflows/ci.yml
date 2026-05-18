@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, "feature/**"]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start Postgres and Redis
+        run: docker compose up -d postgres redis
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            docker compose exec -T postgres pg_isready -U rmc -d rate_my_claim && exit 0
+            sleep 2
+          done
+          exit 1
+
+      - name: Build and migrate backend
+        run: |
+          docker compose build backend
+          docker compose run --rm backend alembic upgrade head
+
+      - name: Seed development data
+        run: docker compose run --rm -e SEED_DEVELOPMENT=true backend python scripts/seed_development.py
+
+      - name: Backend unit tests
+        run: docker compose run --rm backend python -m pytest tests/ -q
+
+      - name: Backend integration tests
+        run: |
+          docker compose up -d backend
+          docker compose exec -T -e RUN_PG_INTEGRATION=1 backend python -m pytest tests/ -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install and test
+        run: |
+          pnpm install
+          pnpm test
+          pnpm run build
