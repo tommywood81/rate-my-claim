@@ -149,6 +149,10 @@ class Settings(BaseSettings):
     evidence_chunk_size: int = Field(default=1200, ge=200, alias="EVIDENCE_CHUNK_SIZE")
     evidence_chunk_overlap: int = Field(default=150, ge=0, alias="EVIDENCE_CHUNK_OVERLAP")
 
+    search_cache_enabled: bool = Field(default=True, alias="SEARCH_CACHE_ENABLED")
+    search_cache_ttl_seconds: int = Field(default=300, ge=30, alias="SEARCH_CACHE_TTL_SECONDS")
+    search_max_candidates: int = Field(default=120, ge=20, le=500, alias="SEARCH_MAX_CANDIDATES")
+
     duplicate_vector_threshold: float = Field(default=0.92, ge=0.0, le=1.0)
     hybrid_semantic_weight: float = 0.35
     hybrid_fts_weight: float = 0.25

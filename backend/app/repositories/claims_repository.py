@@ -171,7 +171,7 @@ class ClaimRepository(RepositoryBase):
 
 
 class HybridSearchRepository(RepositoryBase):
-    """Hybrid semantic + lexical ranking over approved claims."""
+    """Deprecated: use ``ClaimSearchService`` + ``SearchRepository`` (Phase 7)."""
 
     async def hybrid_search(
         self,
@@ -181,40 +181,21 @@ class HybridSearchRepository(RepositoryBase):
         limit: int,
         settings,
     ) -> list[tuple[Claim, float]]:
-        """Fuse cosine similarity with full-text rank and quality heuristics."""
-        dist = Claim.embedding.cosine_distance(query_embedding)  # type: ignore[union-attr]
-        vec_sim = (1.0 - dist).label("vec_sim")
-        tsq = func.plainto_tsquery("english", query_text)
-        fts = func.coalesce(func.ts_rank_cd(Claim.search_vector, tsq), 0.0).label("fts")
-        stmt = (
-            select(Claim, vec_sim, fts)
-            .where(Claim.deleted_at.is_(None), Claim.embedding.is_not(None))
-            .order_by(dist)
-            .limit(max(limit * 4, 20))
+        """Backward-compatible shim delegating to Phase 7 search stack."""
+        from app.repositories.search_repository import SearchRepository
+        from app.services.search.hybrid_ranking import build_scored_claims
+
+        repo = SearchRepository(self._session)
+        raw = await repo.fetch_hybrid_candidates(
+            query_text=query_text,
+            query_embedding=query_embedding,
+            candidate_limit=max(limit * 4, 20),
         )
-        rows = (await self._session.execute(stmt)).all()
-        scored: list[tuple[Claim, float]] = []
-        for claim, vs, ft in rows:
-            rel_count = await self._session.scalar(
-                select(func.count())
-                .select_from(ClaimRelationship)
-                .where(
-                    or_(
-                        ClaimRelationship.source_claim_id == claim.id,
-                        ClaimRelationship.target_claim_id == claim.id,
-                    )
-                )
-            )
-            rd = min(1.0, float(rel_count or 0) / 8.0)
-            ev = min(1.0, float(claim.evidence_count) / 6.0)
-            score = (
-                settings.hybrid_semantic_weight * float(vs)
-                + settings.hybrid_fts_weight * float(ft)
-                + settings.hybrid_evidence_weight * ev
-                + settings.hybrid_confidence_weight * float(claim.confidence_score)
-                + settings.hybrid_freshness_weight * float(claim.freshness_score)
-                + settings.hybrid_relationship_weight * rd
-            )
-            scored.append((claim, score))
-        scored.sort(key=lambda x: x[1], reverse=True)
-        return scored[:limit]
+        scored = build_scored_claims(raw, settings)
+        claim_map = await repo.load_claims_by_ids([UUID(s.claim_id) for s in scored])
+        out: list[tuple[Claim, float]] = []
+        for s in scored[:limit]:
+            claim = claim_map.get(UUID(s.claim_id))
+            if claim:
+                out.append((claim, s.final_score))
+        return out
