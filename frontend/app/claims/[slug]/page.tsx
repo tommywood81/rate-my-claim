@@ -2,16 +2,31 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AiAnalysisList } from "@/components/ai-analysis-list";
+import { ClaimTimeline } from "@/components/claim-timeline";
 import { EvidenceList } from "@/components/evidence-list";
 import { serverGet } from "@/lib/api-server";
-import type { ClaimDetail } from "@/lib/types";
+import type { ClaimDetail, ClaimGraph, ClaimTimeline as ClaimTimelineData } from "@/lib/types";
 
 import { ClaimAiAnalysisPanel } from "./claim-ai-panel";
+import { ClaimGraphSection } from "./claim-graph-section";
 
 export const dynamic = "force-dynamic";
 
 async function load(slug: string): Promise<ClaimDetail | null> {
   return serverGet<ClaimDetail>(`/api/v1/claims/${encodeURIComponent(slug)}`, { cache: "no-store" });
+}
+
+async function loadGraph(slug: string): Promise<ClaimGraph | null> {
+  return serverGet<ClaimGraph>(
+    `/api/v1/claims/${encodeURIComponent(slug)}/graph?depth=1&include_evidence_clusters=true`,
+    { cache: "no-store" },
+  );
+}
+
+async function loadTimeline(slug: string): Promise<ClaimTimelineData | null> {
+  return serverGet<ClaimTimelineData>(`/api/v1/claims/${encodeURIComponent(slug)}/timeline`, {
+    cache: "no-store",
+  });
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -27,7 +42,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function ClaimPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const d = await load(slug);
+  const [d, graph, timeline] = await Promise.all([load(slug), loadGraph(slug), loadTimeline(slug)]);
   if (!d) {
     return (
       <p className="text-sm text-[var(--muted)]" role="status">
@@ -90,6 +105,22 @@ export default async function ClaimPage({ params }: { params: Promise<{ slug: st
             <p className="text-sm text-[var(--muted)]">No evidence artifacts linked yet.</p>
           )}
         </div>
+      </section>
+
+      {graph && (
+        <ClaimGraphSection slug={slug} graph={graph} />
+      )}
+
+      <section aria-labelledby="timeline-heading" className="space-y-4">
+        <header>
+          <h2 id="timeline-heading" className="text-lg font-semibold">
+            History timeline
+          </h2>
+          <p className="text-xs text-[var(--muted)]">
+            Confidence changes, moderation, evidence, contradictions, and freshness signals over time.
+          </p>
+        </header>
+        <ClaimTimeline events={timeline?.events ?? []} />
       </section>
 
       {d.related_slugs.length > 0 && (

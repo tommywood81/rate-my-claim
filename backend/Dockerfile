@@ -10,8 +10,9 @@ COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
 COPY scripts ./scripts
+COPY tests ./tests
 
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir .
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir ".[dev]"
 
 ENV PYTHONPATH=/app
 

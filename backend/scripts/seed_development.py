@@ -22,7 +22,7 @@ from sqlalchemy import select, text
 from app.core.config import get_settings
 from app.core.security import get_password_hash
 from app.db.session import AsyncSessionLocal
-from app.models.claim import Claim, ClaimStatus
+from app.models.claim import Claim, ClaimStatus, RelationshipType
 from app.models.evidence import Evidence, EvidenceSourceType, EvidenceStance
 from app.models.user import User, UserRole
 from app.repositories.audit_repository import AuditRepository
@@ -141,6 +141,44 @@ async def _run() -> None:
             created_by=admin.id,
         )
         session.add(ev)
+
+        counter_claim = "High-intensity daily exercise always improves cardiovascular outcomes without exception."
+        counter_id = uuid4()
+        counter_slug = public_slug_for_claim(counter_claim, counter_id)
+        counter = Claim(
+            id=counter_id,
+            public_slug=counter_slug,
+            canonical_claim_text=counter_claim,
+            normalized_claim_text=counter_claim.lower().strip(),
+            embedding=_unit_embedding(),
+            embedding_model=settings.embedding_model,
+            embedding_version=settings.embedding_version,
+            embedding_at=datetime.now(tz=UTC),
+            status=ClaimStatus.disputed,
+            confidence_score=0.35,
+            controversy_score=0.72,
+            evidence_score=0.25,
+            freshness_score=0.55,
+            evidence_count=0,
+            created_by=admin.id,
+        )
+        session.add(counter)
+        await session.flush()
+
+        await graphs.add_relationship(
+            source_claim_id=claim_id,
+            target_claim_id=counter_id,
+            relationship_type=RelationshipType.contradiction,
+            strength=0.78,
+            explanation="Seed contradiction for graph and timeline UI testing.",
+        )
+        await graphs.add_relationship(
+            source_claim_id=claim_id,
+            target_claim_id=counter_id,
+            relationship_type=RelationshipType.refinement,
+            strength=0.4,
+            explanation="Seed refinement edge (filtered separately in graph UI).",
+        )
 
         audit = AuditRepository(session)
         await audit.append_system_event(

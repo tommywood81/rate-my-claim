@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import desc, or_, select
 
 from app.models.claim import ClaimAlias, ClaimRelationship, ClaimRevision, RelationshipType
 from app.repositories.base import RepositoryBase
@@ -86,14 +86,36 @@ class GraphRepository(RepositoryBase):
         return row
 
     async def list_relationships_for_claim(
-        self, claim_id: UUID, *, limit: int = 200
+        self,
+        claim_id: UUID,
+        *,
+        relationship_types: list[RelationshipType] | None = None,
+        limit: int = 200,
     ) -> list[ClaimRelationship]:
         """Return edges where the claim is source or target."""
+        stmt = select(ClaimRelationship).where(
+            or_(
+                ClaimRelationship.source_claim_id == claim_id,
+                ClaimRelationship.target_claim_id == claim_id,
+            )
+        )
+        if relationship_types:
+            type_values = [t.value if isinstance(t, RelationshipType) else t for t in relationship_types]
+            stmt = stmt.where(ClaimRelationship.relationship_type.in_(type_values))
+        stmt = stmt.order_by(desc(ClaimRelationship.created_at)).limit(limit)
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def list_relationships_between(
+        self, claim_ids: list[UUID], *, limit: int = 500
+    ) -> list[ClaimRelationship]:
+        """Return edges with both endpoints in the given claim id set."""
+        if not claim_ids:
+            return []
         stmt = (
             select(ClaimRelationship)
             .where(
-                (ClaimRelationship.source_claim_id == claim_id)
-                | (ClaimRelationship.target_claim_id == claim_id)
+                ClaimRelationship.source_claim_id.in_(claim_ids),
+                ClaimRelationship.target_claim_id.in_(claim_ids),
             )
             .limit(limit)
         )

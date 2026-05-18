@@ -69,6 +69,60 @@ export type UserProfile = {
   email_verified_at: string | null;
 };
 
+export type GraphNode = {
+  id: string;
+  type: "claim" | "evidence_cluster";
+  position: { x: number; y: number };
+  data: {
+    label: string;
+    slug: string | null;
+    is_focus: boolean;
+    stance?: string | null;
+    count?: number | null;
+    confidence_score?: number | null;
+  };
+};
+
+export type GraphEdge = {
+  id: string;
+  source: string;
+  target: string;
+  type: "relationship" | "evidence_cluster";
+  label?: string | null;
+  data?: {
+    relationship_type?: string | null;
+    strength?: number | null;
+    explanation?: string | null;
+  };
+};
+
+export type ClaimGraph = {
+  focus_claim_id: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  available_relationship_types: string[];
+  truncated: boolean;
+};
+
+export type TimelineEvent = {
+  id: string;
+  event_type:
+    | "confidence_evolution"
+    | "moderation"
+    | "evidence"
+    | "contradiction_emergence"
+    | "freshness_decay";
+  timestamp: string;
+  title: string;
+  description: string | null;
+  payload: Record<string, unknown>;
+};
+
+export type ClaimTimeline = {
+  claim_id: string;
+  events: TimelineEvent[];
+};
+
 export type CursorMeta = {
   next_cursor?: string | null;
   previous_cursor?: string | null;

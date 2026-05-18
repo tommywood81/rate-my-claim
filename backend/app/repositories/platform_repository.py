@@ -98,3 +98,17 @@ class PlatformRepository(RepositoryBase):
         if target_type:
             stmt = stmt.where(ModerationAction.target_type == target_type)
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def list_moderation_for_target(
+        self, target_id: UUID, *, target_type: str | None = None, limit: int = 100
+    ) -> list[ModerationAction]:
+        """Return moderation actions for a specific claim or pending target."""
+        stmt = (
+            select(ModerationAction)
+            .where(ModerationAction.target_id == target_id)
+            .order_by(desc(ModerationAction.created_at))
+            .limit(limit)
+        )
+        if target_type:
+            stmt = stmt.where(ModerationAction.target_type == target_type)
+        return list((await self._session.execute(stmt)).scalars().all())
