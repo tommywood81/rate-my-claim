@@ -8,6 +8,7 @@ import pytest
 
 from app.repositories.claims_repository import ClaimRepository
 from app.schemas.claims import AIAnalysisResponse
+from app.services.claims.ai_analyses_display import dedupe_public_ai_analyses
 from app.services.claims.live_summary import is_stale_live_summary, resolve_live_ai_summary
 from app.workers.tasks.enrichment_tasks import (
     _provisional_verdict_from_scores,
@@ -15,6 +16,36 @@ from app.workers.tasks.enrichment_tasks import (
 )
 from datetime import UTC, datetime
 from uuid import uuid4
+
+
+def test_dedupe_public_ai_analyses_hides_duplicate_confidence_text() -> None:
+    text = (
+        "The claim that there are 8 planets in our solar system is widely accepted "
+        "and supported by astronomical research."
+    )
+    analyses = [
+        AIAnalysisResponse(
+            id=uuid4(),
+            analysis_type="structured_verdict",
+            model_name="gpt-4o-mini",
+            provider="openai",
+            generated_text=text,
+            structured_payload=None,
+            created_at=datetime.now(tz=UTC),
+        ),
+        AIAnalysisResponse(
+            id=uuid4(),
+            analysis_type="confidence_analysis",
+            model_name="gpt-4o-mini",
+            provider="openai",
+            generated_text=text,
+            structured_payload=None,
+            created_at=datetime.now(tz=UTC),
+        ),
+    ]
+    out = dedupe_public_ai_analyses(analyses)
+    assert len(out) == 1
+    assert out[0].analysis_type == "structured_verdict"
 
 
 def test_resolve_live_summary_replaces_stale_rejection_hint() -> None:

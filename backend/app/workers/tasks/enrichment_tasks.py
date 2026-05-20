@@ -37,12 +37,15 @@ _TERMINAL = frozenset(
 
 def _provisional_verdict_from_scores(scores: dict[str, Any]) -> dict[str, Any]:
     """Structured verdict when no corpus evidence lines were retrieved."""
-    rationale = str(scores.get("rationale", "")).strip()
+    aggregate = float(scores.get("aggregate", 0.5) or 0.5)
     return {
-        "verdict_summary": rationale
-        or "No matching evidence in the archive; provisional assessment only.",
+        "verdict_summary": (
+            f"Provisional verdict (confidence {aggregate:.0%}): no matching evidence "
+            "was retrieved from the archive. See the research summary and confidence "
+            "analysis for the full rationale."
+        ),
         "citations": [],
-        "confidence_hint": float(scores.get("aggregate", 0.5) or 0.5),
+        "confidence_hint": aggregate,
         "controversy_hint": 0.0,
     }
 

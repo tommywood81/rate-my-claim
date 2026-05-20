@@ -33,6 +33,7 @@ from app.schemas.claims import (
 from app.schemas.common import CursorMeta, SuccessEnvelope
 from app.services.ai.factory import get_ai_provider
 from app.services.claim_analysis_service import add_structured_verdict_for_claim
+from app.services.claims.ai_analyses_display import dedupe_public_ai_analyses
 from app.services.claims.claim_live_context import build_claim_live_context, merge_ai_analyses
 from app.services.claims.live_claim_sync import ensure_live_claim_for_pending, get_pending_for_claim
 from app.services.claims.pipeline_labels import visibility_label
@@ -254,7 +255,7 @@ async def claim_detail(
 
     pending = await get_pending_for_claim(db, claim.id)
     live = await build_claim_live_context(db, claim=claim, pending=pending)
-    ai_out = merge_ai_analyses(ai_out, live.pending_ai_analyses)
+    ai_out = dedupe_public_ai_analyses(merge_ai_analyses(ai_out, live.pending_ai_analyses))
 
     related: list[str] = []
     if claim.embedding is not None:
