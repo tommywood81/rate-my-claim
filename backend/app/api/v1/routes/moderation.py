@@ -12,13 +12,63 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.deps import ModeratorUser
 from app.db.session import get_db
 from app.models.claim import ClaimStatus, PendingClaim, ProcessingStatus
-from app.schemas.claims import ModerationActionRequest, PendingClaimResponse
+from app.schemas.claims import DuplicateHintResponse, ModerationActionRequest, PendingClaimResponse
 from app.schemas.common import CursorMeta, ErrorDetail, ErrorEnvelope, SuccessEnvelope
+from app.repositories.claims_repository import ClaimRepository
 from app.services.moderation.moderation_service import ModerationService
 from app.utils.cursor import ClaimCursor, decode_cursor, encode_cursor
 from app.workers.celery_app import process_pending_claim
 
 router = APIRouter(prefix="/moderation", tags=["moderation"])
+
+
+async def _duplicate_hints(
+    db: AsyncSession,
+    row: PendingClaim,
+    raw_ids: list[str] | None,
+) -> list[DuplicateHintResponse]:
+    """Resolve duplicate ids to titles/slugs; drop self-match on linked live claim."""
+    if not raw_ids:
+        return []
+    repo = ClaimRepository(db)
+    hints: list[DuplicateHintResponse] = []
+    linked = row.linked_claim_id
+    for raw in raw_ids:
+        if raw.startswith("pending:"):
+            hints.append(
+                DuplicateHintResponse(id=raw, slug=None, title="Another pending submission")
+            )
+            continue
+        try:
+            claim_id = UUID(raw)
+        except ValueError:
+            continue
+        if linked and claim_id == linked:
+            continue
+        claim = await repo.get_claim_by_id(claim_id)
+        if claim is None:
+            continue
+        hints.append(
+            DuplicateHintResponse(
+                id=raw,
+                slug=claim.public_slug,
+                title=claim.canonical_claim_text[:120],
+            )
+        )
+    return hints
+
+
+async def _pending_with_slug(db: AsyncSession, row: PendingClaim) -> PendingClaimResponse:
+    """Attach live public slug and resolved duplicate hints for moderators."""
+    data = PendingClaimResponse.model_validate(row)
+    repo = ClaimRepository(db)
+    slug = None
+    if row.linked_claim_id:
+        claim = await repo.get_claim_by_id(row.linked_claim_id)
+        if claim is not None:
+            slug = claim.public_slug
+    hints = await _duplicate_hints(db, row, row.duplicate_candidate_ids)
+    return data.model_copy(update={"public_slug": slug, "duplicate_hints": hints or None})
 
 _ACTIVE_STATUSES = (
     ProcessingStatus.submitted,
@@ -68,7 +118,7 @@ async def moderation_queue(
     if has_more and rows:
         last = rows[-1]
         next_c = encode_cursor(ClaimCursor(created_at=last.created_at, claim_id=last.id))
-    data = [PendingClaimResponse.model_validate(r) for r in rows]
+    data = [await _pending_with_slug(db, r) for r in rows]
     return SuccessEnvelope(
         data=data,
         meta=CursorMeta(next_cursor=next_c, previous_cursor=None, has_more=has_more).model_dump(),

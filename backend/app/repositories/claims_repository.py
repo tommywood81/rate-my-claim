@@ -91,6 +91,16 @@ class ClaimRepository(RepositoryBase):
         stmt = select(PendingClaim).where(PendingClaim.id == pending_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def pending_by_linked_claim_ids(
+        self, claim_ids: list[UUID]
+    ) -> dict[UUID, PendingClaim]:
+        """Map public claim ids to their linked pending pipeline row."""
+        if not claim_ids:
+            return {}
+        stmt = select(PendingClaim).where(PendingClaim.linked_claim_id.in_(claim_ids))
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return {p.linked_claim_id: p for p in rows if p.linked_claim_id is not None}
+
     async def save_pending(self, pending: PendingClaim) -> PendingClaim:
         """Insert or update pending claim."""
         self._session.add(pending)
@@ -163,12 +173,27 @@ class ClaimRepository(RepositoryBase):
             return None
         return await self.load_claim_detail_bundle(claim.id)
 
-    async def evidence_for_similar_claims(self, embedding: list[float], *, limit: int) -> Sequence[Evidence]:
-        """Retrieve evidence from semantically nearest claims (retrieval-first)."""
-        similar = await self.vector_similar_claims(embedding, limit=6, exclude_id=None)
-        if not similar:
+    async def evidence_for_similar_claims(
+        self,
+        embedding: list[float],
+        *,
+        limit: int,
+        min_similarity: float = 0.72,
+        exclude_claim_id: UUID | None = None,
+    ) -> Sequence[Evidence]:
+        """Retrieve evidence from semantically similar claims above a similarity floor."""
+        similar = await self.vector_similar_claims(
+            embedding, limit=12, exclude_id=exclude_claim_id
+        )
+        claim_ids: list[UUID] = []
+        for claim, dist in similar:
+            if (1.0 - float(dist)) < min_similarity:
+                continue
+            claim_ids.append(claim.id)
+            if len(claim_ids) >= 6:
+                break
+        if not claim_ids:
             return []
-        claim_ids = [c.id for c, _ in similar]
         stmt = select(Evidence).where(Evidence.claim_id.in_(claim_ids)).limit(limit)
         return (await self._session.execute(stmt)).scalars().all()
 

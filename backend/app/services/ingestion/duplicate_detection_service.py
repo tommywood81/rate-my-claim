@@ -24,6 +24,7 @@ class DuplicateDetectionService:
         embedding: list[float],
         *,
         pending_id: UUID,
+        exclude_claim_id: UUID | None = None,
         claim_limit: int = 12,
         pending_limit: int = 8,
     ) -> list[str]:
@@ -31,8 +32,10 @@ class DuplicateDetectionService:
         threshold = self._settings.duplicate_vector_threshold
         dup_ids: list[str] = []
         for claim, dist in await self._claims.vector_similar_claims(
-            embedding, limit=claim_limit, exclude_id=None
+            embedding, limit=claim_limit, exclude_id=exclude_claim_id
         ):
+            if exclude_claim_id and claim.id == exclude_claim_id:
+                continue
             if 1.0 - float(dist) >= threshold:
                 dup_ids.append(str(claim.id))
         for other, dist in await self._claims.vector_similar_pending(

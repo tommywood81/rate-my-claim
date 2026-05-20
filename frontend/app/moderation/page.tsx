@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   ModerationRowTokenHint,
@@ -14,7 +15,9 @@ type Pending = {
   error_message?: string | null;
   ai_summary?: string | null;
   duplicate_candidate_ids?: string[] | null;
+  duplicate_hints?: { id: string; slug?: string | null; title?: string | null }[] | null;
   source_urls?: string[] | null;
+  public_slug?: string | null;
   created_at: string;
 };
 
@@ -134,12 +137,15 @@ export default function ModerationPage() {
   const canApprove = (p: Pending) => p.processing_status === "awaiting_moderation";
   const canRevise = (p: Pending) => p.processing_status === "awaiting_moderation";
   const canReprocess = (p: Pending) =>
-    p.processing_status === "failed" || p.processing_status === "revision_requested";
+    p.processing_status === "failed" ||
+    p.processing_status === "revision_requested" ||
+    p.processing_status === "awaiting_moderation";
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-xl font-semibold">Moderation queue</h1>
+        <p className="owid-kicker">Moderation</p>
+        <h1 className="owid-page-heading text-3xl">Review queue</h1>
         {loadState === "authorized" && (
           <button
             type="button"
@@ -191,6 +197,14 @@ export default function ModerationPage() {
             <p className="text-xs text-[var(--muted)]">
               {p.id} · <span className="font-medium text-[var(--fg)]">{p.processing_status}</span> ·{" "}
               {new Date(p.created_at).toLocaleString()}
+              {p.public_slug && (
+                <>
+                  {" · "}
+                  <Link href={`/claims/${p.public_slug}`} className="text-[var(--accent)] hover:underline">
+                    View live claim
+                  </Link>
+                </>
+              )}
               {" · "}
               <ModerationRowTokenHint
                 rawClaimText={p.raw_claim_text}
@@ -203,11 +217,22 @@ export default function ModerationPage() {
                 <span className="font-medium">AI summary:</span> {p.ai_summary}
               </p>
             )}
-            {p.duplicate_candidate_ids && p.duplicate_candidate_ids.length > 0 && (
+            {p.duplicate_hints && p.duplicate_hints.length > 0 && (
               <p className="text-xs text-[var(--muted)]">
-                <span className="font-medium">Duplicate candidates:</span>{" "}
-                {p.duplicate_candidate_ids.slice(0, 5).join(", ")}
-                {p.duplicate_candidate_ids.length > 5 ? "…" : ""}
+                <span className="font-medium">Possible duplicates:</span>{" "}
+                {p.duplicate_hints.slice(0, 3).map((hint, i) => (
+                  <span key={hint.id}>
+                    {i > 0 ? "; " : ""}
+                    {hint.slug ? (
+                      <Link href={`/claims/${hint.slug}`} className="text-[var(--accent)] hover:underline">
+                        {hint.title || hint.slug}
+                      </Link>
+                    ) : (
+                      hint.title || hint.id
+                    )}
+                  </span>
+                ))}
+                {p.duplicate_hints.length > 3 ? "…" : ""}
               </p>
             )}
             {p.error_message && (
@@ -226,7 +251,7 @@ export default function ModerationPage() {
                 disabled={!canApprove(p)}
                 title={canApprove(p) ? undefined : "Wait until status is awaiting_moderation"}
               >
-                Approve
+                Mark reviewed
               </button>
               <button
                 type="button"
@@ -249,9 +274,9 @@ export default function ModerationPage() {
                 className="rounded border border-[var(--border)] px-3 py-1 text-xs hover:bg-[var(--card)] disabled:opacity-45"
                 onClick={() => reprocess(p.id)}
                 disabled={!canReprocess(p)}
-                title={canReprocess(p) ? undefined : "For failed or revision_requested"}
+                title={canReprocess(p) ? undefined : "Re-run enrichment after failed or revision"}
               >
-                Reprocess
+                Re-run enrichment
               </button>
             </div>
           </li>

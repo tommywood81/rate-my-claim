@@ -10,14 +10,23 @@ type ClaimSearchHitProps = {
 export function ClaimSearchHit({ claim, showScores = false }: ClaimSearchHitProps) {
   const scores = claim.scores;
   return (
-    <article className="flex flex-col gap-2 px-4 py-4 sm:flex-row sm:items-start sm:justify-between">
+    <article className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0 flex-1">
         <h2 className="text-base font-medium leading-snug">
-          <Link href={`/claims/${claim.public_slug}`} className="text-[var(--fg)] hover:underline">
+          <Link
+            href={`/claims/${claim.public_slug}`}
+            className="text-[var(--accent-dark)] no-underline hover:text-[var(--accent)] hover:underline"
+          >
             {claim.canonical_claim_text}
           </Link>
         </h2>
         <p className="mt-1 text-xs text-[var(--muted)]">
+          {claim.visibility_label && (
+            <>
+              <span className="font-medium text-[var(--fg)]">{claim.visibility_label}</span>
+              {" · "}
+            </>
+          )}
           <span className="capitalize">{claim.status}</span>
           {" · "}
           confidence {claim.confidence_score.toFixed(2)}
@@ -28,7 +37,7 @@ export function ClaimSearchHit({ claim, showScores = false }: ClaimSearchHitProp
         </p>
       </div>
       {showScores && scores && (
-        <dl className="shrink-0 rounded border border-[var(--border)] bg-white px-3 py-2 text-xs text-[var(--muted)]">
+        <dl className="owid-card shrink-0 px-3 py-2 text-xs text-[var(--muted)]">
           <div className="flex justify-between gap-4">
             <dt>Relevance</dt>
             <dd className="font-medium text-[var(--fg)]">{scores.final_score.toFixed(2)}</dd>

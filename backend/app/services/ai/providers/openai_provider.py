@@ -91,18 +91,23 @@ class OpenAIProvider(BaseAIProvider):
     async def canonicalize_claim(self, raw_text: str) -> dict[str, Any]:
         """Normalize claim text into declarative empirical form."""
         system = (
-            "You normalize empirical claims for a research database. "
+            "You normalize claims for a research database. "
             "Output strict JSON keys: canonical_text (string), "
             "normalized_text (string), domain_guess (string or null), "
-            "rejection_reason (string or null if acceptable). "
-            "Reject vague, ideological, or non-falsifiable claims with rejection_reason."
+            "rejection_reason (always null). "
+            "Always produce canonical_text and normalized_text. Do not refuse submissions; "
+            "rewrite vague wording into the clearest testable statement without changing intent."
         )
         model = model_for_operation(self._settings, "canonicalize_claim")
         return await self._chat_json(system, raw_text, model=model)
 
     async def summarize_evidence(self, context: str) -> str:
         """Summarize only what is explicitly present in context."""
-        system = "Summarize retrieved evidence in <=120 words. Do not invent sources."
+        system = (
+            "Summarize only evidence relevant to the claim under review. "
+            "If numbered lines are unrelated to that claim, say no relevant evidence was found. "
+            "<=120 words. Do not invent sources."
+        )
         user = context[:12000]
 
         model = model_for_operation(self._settings, "summarize_evidence")
@@ -230,13 +235,14 @@ class OpenAIProvider(BaseAIProvider):
     async def structured_verdict(self, claim: str, retrieved_context: str) -> dict[str, Any]:
         """Structured verdict referencing CONTEXT_LINE numbers only."""
         system = (
-            "You assist a moderation queue. Using ONLY numbered lines in CONTEXT, "
-            "produce JSON: {"
+            "You assist a moderation queue. Using ONLY numbered lines in CONTEXT that "
+            "actually relate to the CLAIM, produce JSON: {"
             '"verdict_summary": string, '
             '"citations": [{"context_line": int, "note": string}], '
             '"confidence_hint": number, '
             '"controversy_hint": number '
-            "}. Never invent URLs or studies not present in CONTEXT."
+            "}. If no lines relate to the claim, say so with empty citations. "
+            "Never invent URLs or studies not present in CONTEXT."
         )
         model = model_for_operation(self._settings, "structured_verdict")
         return await self._chat_json(

@@ -20,6 +20,7 @@ from app.services.moderation.state_machine import (
     assert_claim_status_transition,
     assert_pending_transition,
 )
+from app.services.claims.live_claim_sync import sync_pending_to_linked_claim
 from app.utils.slug import public_slug_for_claim
 
 logger = logging.getLogger(__name__)
@@ -89,12 +90,38 @@ class ModerationService:
                     raise ValueError(f"duplicate_of_claim:{existing.public_slug}")
 
         canonical = pending.canonical_candidate_text or pending.raw_claim_text
-        new_id = uuid4()
-        slug = public_slug_for_claim(canonical, new_id)
-
-        confidence = 0.0
-        controversy = 0.0
         analyses = await self._ai.list_for_target("pending_claim", pending_id)
+
+        if pending.linked_claim_id:
+            claim = await self._claims.get_claim_by_id(pending.linked_claim_id)
+            if claim is None:
+                raise ValueError("linked_claim_not_found")
+        else:
+            new_id = uuid4()
+            slug = public_slug_for_claim(canonical, new_id)
+            claim = Claim(
+                id=new_id,
+                public_slug=slug,
+                canonical_claim_text=canonical,
+                normalized_claim_text=pending.normalized_claim_text or canonical,
+                embedding=pending.embedding,
+                embedding_model=pending.embedding_model,
+                embedding_version=pending.embedding_version,
+                embedding_at=pending.embedding_at,
+                domain=None,
+                status=ClaimStatus.insufficient_evidence.value,
+                confidence_score=0.0,
+                controversy_score=0.0,
+                evidence_score=0.0,
+                freshness_score=0.5,
+                evidence_count=0,
+                created_by=pending.submitted_by,
+            )
+            self._session.add(claim)
+            pending.linked_claim_id = claim.id
+
+        confidence = float(claim.confidence_score or 0.0)
+        controversy = float(claim.controversy_score or 0.0)
         for row in analyses:
             if row.analysis_type == "confidence_analysis" and row.structured_payload:
                 try:
@@ -110,25 +137,15 @@ class ModerationService:
                 except (json.JSONDecodeError, TypeError, ValueError):
                     continue
 
-        claim = Claim(
-            id=new_id,
-            public_slug=slug,
-            canonical_claim_text=canonical,
-            normalized_claim_text=pending.normalized_claim_text or canonical,
-            embedding=pending.embedding,
-            embedding_model=pending.embedding_model,
-            embedding_version=pending.embedding_version,
-            embedding_at=pending.embedding_at,
-            domain=None,
-            status=ClaimStatus.insufficient_evidence.value,
-            confidence_score=confidence,
-            controversy_score=controversy,
-            evidence_score=0.0,
-            freshness_score=0.5,
-            evidence_count=0,
-            created_by=pending.submitted_by,
-        )
-        self._session.add(claim)
+        claim.canonical_claim_text = canonical
+        claim.normalized_claim_text = pending.normalized_claim_text or canonical
+        claim.embedding = pending.embedding
+        claim.embedding_model = pending.embedding_model
+        claim.embedding_version = pending.embedding_version
+        claim.embedding_at = pending.embedding_at
+        claim.confidence_score = confidence
+        claim.controversy_score = controversy
+        claim.last_reviewed_at = datetime.now(tz=UTC)
 
         verdict_bundle: dict | None = None
         for row in analyses:
@@ -258,6 +275,11 @@ class ModerationService:
         current = ProcessingStatus(str(pending.processing_status))
         assert_pending_transition(current, ProcessingStatus.rejected)
         pending.processing_status = ProcessingStatus.rejected
+        if pending.linked_claim_id:
+            linked = await self._claims.get_claim_by_id(pending.linked_claim_id)
+            if linked is not None:
+                linked.status = ClaimStatus.archived.value
+                linked.last_reviewed_at = datetime.now(tz=UTC)
         await self._log_action(
             actor_id=actor_id,
             action_type=ModerationActionType.reject_claim,
@@ -295,6 +317,8 @@ class ModerationService:
         assert_pending_transition(current, ProcessingStatus.submitted)
         pending.processing_status = ProcessingStatus.submitted
         pending.error_message = None
+        pending.ai_summary = None
+        await sync_pending_to_linked_claim(self._session, pending_id)
         await self._log_action(
             actor_id=actor_id,
             action_type=ModerationActionType.update_scores,

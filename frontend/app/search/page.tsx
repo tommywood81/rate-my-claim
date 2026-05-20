@@ -55,10 +55,11 @@ export default async function SearchPage({
   }
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Search claims</h1>
-        <p className="max-w-2xl text-sm text-[var(--muted)]">
+    <div className="space-y-8">
+      <header className="space-y-3 border-b border-[var(--border)] pb-6">
+        <p className="owid-kicker">Explore</p>
+        <h1 className="owid-page-heading text-3xl sm:text-4xl">Search claims</h1>
+        <p className="owid-lead text-base">
           Hybrid ranking blends semantic similarity, text match, evidence quality, confidence, and freshness.
         </p>
       </header>
@@ -75,10 +76,8 @@ export default async function SearchPage({
                 key={s.id}
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`rounded-full border px-3 py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
-                  active
-                    ? "border-[var(--accent)] bg-[var(--accent)] text-white"
-                    : "border-[var(--border)] bg-white text-[var(--muted)] hover:border-[var(--accent)]"
+                className={`owid-chip focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
+                  active ? "owid-chip-active" : ""
                 }`}
               >
                 {s.label}
@@ -97,7 +96,7 @@ export default async function SearchPage({
           <h2 id="search-results-heading" className="sr-only">
             Results for {q}
           </h2>
-          <ul className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-sm">
+          <ul className="owid-card-list">
             {claims.map((c) => (
               <li key={c.id}>
                 <ClaimSearchHit claim={c} showScores />

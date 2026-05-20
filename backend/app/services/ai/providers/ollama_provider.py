@@ -53,7 +53,8 @@ class OllamaProvider(BaseAIProvider):
     async def canonicalize_claim(self, raw_text: str) -> dict[str, Any]:
         """Return JSON parsed from model output."""
         text = await self._chat(
-            f"Return JSON with keys canonical_text, normalized_text, domain_guess, rejection_reason. Input: {raw_text}",
+            f"Return JSON canonical_text, normalized_text, domain_guess, rejection_reason (always null). "
+            f"Always canonicalize; do not refuse. Input: {raw_text}",
             "canonicalize_claim",
         )
         try:

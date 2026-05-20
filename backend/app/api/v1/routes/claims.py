@@ -33,10 +33,21 @@ from app.schemas.claims import (
 from app.schemas.common import CursorMeta, SuccessEnvelope
 from app.services.ai.factory import get_ai_provider
 from app.services.claim_analysis_service import add_structured_verdict_for_claim
+from app.services.claims.claim_live_context import build_claim_live_context, merge_ai_analyses
+from app.services.claims.live_claim_sync import ensure_live_claim_for_pending, get_pending_for_claim
+from app.services.claims.pipeline_labels import visibility_label
 from app.utils.cursor import ClaimCursor, decode_cursor, encode_cursor
 from app.workers.celery_app import process_pending_claim
 
 router = APIRouter(tags=["claims"])
+
+
+def _pending_response(pending, *, slug: str | None = None) -> PendingClaimResponse:
+    """Serialize pending row with optional live public slug."""
+    data = PendingClaimResponse.model_validate(pending)
+    if slug:
+        return data.model_copy(update={"public_slug": slug})
+    return data
 
 
 @router.get("/csrf", response_model=SuccessEnvelope[dict])
@@ -74,19 +85,23 @@ async def submit_claim(
         source_url_count=len(body.source_urls or []),
         anonymous=user is None,
     )
+    live_claim = await ensure_live_claim_for_pending(db, pending)
+    await db.commit()
     process_pending_claim.delay(str(pending.id))
-    meta: dict[str, str | bool] = {"anonymous": user is None}
+    meta: dict[str, str | bool] = {"anonymous": user is None, "public_slug": live_claim.public_slug}
     if user:
         meta["submitted_by"] = str(user.id)
         meta["message"] = (
-            "Claim queued. You can track this submission while signed in and resubmit after revision requests."
+            "Your claim is live. Research runs in the background; moderators may refine it at any time."
         )
     else:
         meta["message"] = (
-            "Claim queued for moderation. Sign in to link future submissions to your account and "
-            "revise after moderator feedback."
+            "Your claim is live. Sign in to link submissions to your account and revise after feedback."
         )
-    return SuccessEnvelope(data=PendingClaimResponse.model_validate(pending), meta=meta)
+    return SuccessEnvelope(
+        data=_pending_response(pending, slug=live_claim.public_slug),
+        meta=meta,
+    )
 
 
 @router.get("/pending-claims/{pending_id}", response_model=SuccessEnvelope[PendingClaimResponse])
@@ -100,7 +115,12 @@ async def get_pending(
     pending = await repo.get_pending(pending_id)
     if pending is None or pending.submitted_by is None or pending.submitted_by != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
-    return SuccessEnvelope(data=PendingClaimResponse.model_validate(pending))
+    slug = None
+    if pending.linked_claim_id:
+        linked = await repo.get_claim_by_id(pending.linked_claim_id)
+        if linked:
+            slug = linked.public_slug
+    return SuccessEnvelope(data=_pending_response(pending, slug=slug))
 
 
 @router.patch("/pending-claims/{pending_id}", response_model=SuccessEnvelope[PendingClaimResponse])
@@ -124,7 +144,12 @@ async def resubmit_pending(
     pending.processing_status = ProcessingStatus.submitted
     pending.error_message = None
     process_pending_claim.delay(str(pending.id))
-    return SuccessEnvelope(data=PendingClaimResponse.model_validate(pending))
+    slug = None
+    if pending.linked_claim_id:
+        linked = await repo.get_claim_by_id(pending.linked_claim_id)
+        if linked:
+            slug = linked.public_slug
+    return SuccessEnvelope(data=_pending_response(pending, slug=slug))
 
 
 @router.get("/claims", response_model=SuccessEnvelope[list[ClaimListItemResponse]])
@@ -144,7 +169,21 @@ async def list_claims(
     if has_more and rows:
         last = rows[-1]
         next_c = encode_cursor(ClaimCursor(created_at=last.created_at, claim_id=last.id))
-    data = [ClaimListItemResponse.model_validate(r) for r in rows]
+    pending_map = await repo.pending_by_linked_claim_ids([r.id for r in rows])
+    data: list[ClaimListItemResponse] = []
+    for row in rows:
+        item = ClaimListItemResponse.model_validate(row)
+        pending = pending_map.get(row.id)
+        proc = str(pending.processing_status) if pending else None
+        reviewed = row.last_reviewed_at is not None or (
+            pending is not None and str(pending.processing_status) == "completed"
+        )
+        vis = visibility_label(
+            processing_status=proc,
+            claim_status=str(row.status),
+            moderation_reviewed=reviewed,
+        )
+        data.append(item.model_copy(update={"processing_status": proc, "visibility_label": vis}))
     return SuccessEnvelope(
         data=data,
         meta=CursorMeta(next_cursor=next_c, previous_cursor=None, has_more=has_more).model_dump(),
@@ -181,6 +220,7 @@ async def run_claim_ai_analysis(
 async def claim_detail(
     slug: str,
     db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
 ) -> SuccessEnvelope[ClaimDetailResponse]:
     """Public claim detail page payload."""
     repo = ClaimRepository(db)
@@ -212,10 +252,15 @@ async def claim_detail(
             break
     ai_out = [AIAnalysisResponse.model_validate(a) for a in deduped]
 
-    related = []
+    pending = await get_pending_for_claim(db, claim.id)
+    live = await build_claim_live_context(db, claim=claim, pending=pending)
+    ai_out = merge_ai_analyses(ai_out, live.pending_ai_analyses)
+
+    related: list[str] = []
     if claim.embedding is not None:
-        sim = await repo.vector_similar_claims(claim.embedding, limit=6, exclude_id=claim.id)
-        related = [c.public_slug for c, _ in sim]
+        sim = await repo.vector_similar_claims(claim.embedding, limit=12, exclude_id=claim.id)
+        floor = settings.enrichment_retrieval_min_similarity
+        related = [c.public_slug for c, d in sim if (1.0 - float(d)) >= floor][:6]
 
     detail = ClaimDetailResponse(
         id=claim.id,
@@ -234,6 +279,12 @@ async def claim_detail(
         evidence_contextual=ctx,
         ai_analyses=ai_out,
         related_slugs=related,
+        processing_status=live.processing_status,
+        pipeline_stage_key=live.pipeline_stage_key,
+        pipeline_stage_label=live.pipeline_stage_label,
+        live_ai_summary=live.live_ai_summary,
+        visibility_label=live.visibility_label,
+        moderation_reviewed=live.moderation_reviewed,
     )
     return SuccessEnvelope(data=detail)
 

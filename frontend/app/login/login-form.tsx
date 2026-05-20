@@ -53,9 +53,9 @@ export function LoginForm({ defaultNext }: Props) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="mx-auto max-w-md space-y-4 rounded border border-[var(--border)] bg-[var(--card)] p-6">
+    <form onSubmit={onSubmit} className="owid-card mx-auto max-w-md space-y-4 p-6">
       <div>
-        <label htmlFor="username" className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+        <label htmlFor="username" className="owid-kicker">
           Username
         </label>
         <input
@@ -65,11 +65,11 @@ export function LoginForm({ defaultNext }: Props) {
           required
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          className="mt-1 w-full rounded border border-[var(--border)] px-3 py-2"
+          className="owid-input mt-1 w-full"
         />
       </div>
       <div>
-        <label htmlFor="password" className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+        <label htmlFor="password" className="owid-kicker">
           Password
         </label>
         <input
@@ -80,14 +80,14 @@ export function LoginForm({ defaultNext }: Props) {
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded border border-[var(--border)] px-3 py-2"
+          className="owid-input mt-1 w-full"
         />
       </div>
       {err && <p className="text-sm text-red-700">{err}</p>}
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white enabled:hover:opacity-95 disabled:opacity-60"
+        className="owid-btn-primary w-full disabled:opacity-60"
       >
         {loading ? "Signing in…" : "Sign in"}
       </button>

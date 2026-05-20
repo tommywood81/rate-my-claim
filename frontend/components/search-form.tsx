@@ -2,19 +2,21 @@ type SearchFormProps = {
   defaultQuery?: string;
   action?: string;
   className?: string;
+  large?: boolean;
 };
 
 export function SearchForm({
   defaultQuery = "",
   action = "/search",
   className = "",
+  large = false,
 }: SearchFormProps) {
   return (
     <form
       action={action}
       method="get"
       role="search"
-      className={`flex flex-col gap-2 sm:flex-row ${className}`}
+      className={`flex flex-col gap-3 sm:flex-row sm:items-stretch ${className}`}
     >
       <label htmlFor="search-q" className="sr-only">
         Search claims
@@ -25,13 +27,10 @@ export function SearchForm({
         type="search"
         defaultValue={defaultQuery}
         placeholder="Search claims by meaning or keywords…"
-        className="min-h-[44px] flex-1 rounded border border-[var(--border)] bg-white px-3 py-2 text-[var(--fg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+        className={`owid-input flex-1 ${large ? "min-h-[3rem] text-lg" : ""}`}
         autoComplete="off"
       />
-      <button
-        type="submit"
-        className="min-h-[44px] rounded bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-      >
+      <button type="submit" className="owid-btn-primary shrink-0 sm:min-w-[7rem]">
         Search
       </button>
     </form>

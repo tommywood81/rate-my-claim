@@ -9,6 +9,8 @@ export type ClaimListItem = {
   evidence_count: number;
   discovery_score: number;
   updated_at: string;
+  processing_status?: string | null;
+  visibility_label?: string | null;
   scores?: SearchScoreBreakdown;
 };
 
@@ -59,6 +61,12 @@ export type ClaimDetail = {
   evidence_contextual: EvidenceItem[];
   ai_analyses: AIAnalysisItem[];
   related_slugs: string[];
+  processing_status?: string | null;
+  pipeline_stage_key?: string | null;
+  pipeline_stage_label?: string | null;
+  live_ai_summary?: string | null;
+  visibility_label?: string | null;
+  moderation_reviewed?: boolean;
 };
 
 export type UserProfile = {

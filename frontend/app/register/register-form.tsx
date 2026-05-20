@@ -50,7 +50,7 @@ export function RegisterForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="mx-auto max-w-md space-y-4 rounded border border-[var(--border)] bg-[var(--card)] p-6"
+      className="owid-card mx-auto max-w-md space-y-4 p-6"
     >
       <div>
         <label htmlFor="reg-username" className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
@@ -64,7 +64,7 @@ export function RegisterForm() {
           minLength={3}
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          className="mt-1 w-full rounded border border-[var(--border)] px-3 py-2"
+          className="owid-input mt-1 w-full"
         />
       </div>
       <div>
@@ -79,7 +79,7 @@ export function RegisterForm() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 w-full rounded border border-[var(--border)] px-3 py-2"
+          className="owid-input mt-1 w-full"
         />
       </div>
       <div>
@@ -95,7 +95,7 @@ export function RegisterForm() {
           minLength={10}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded border border-[var(--border)] px-3 py-2"
+          className="owid-input mt-1 w-full"
         />
         <p className="mt-1 text-xs text-[var(--muted)]">At least 10 characters.</p>
       </div>
@@ -103,7 +103,7 @@ export function RegisterForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white enabled:hover:opacity-95 disabled:opacity-60"
+        className="owid-btn-primary w-full disabled:opacity-60"
       >
         {loading ? "Creating account…" : "Create account"}
       </button>

@@ -156,10 +156,10 @@ export function ClaimGraphPanel({ slug, initialGraph }: { slug: string; initialG
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   return (
-    <section aria-labelledby="graph-heading" className="space-y-3">
+    <section aria-labelledby="graph-heading" className="owid-card-padded space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h2 id="graph-heading" className="text-lg font-semibold">
+          <h2 id="graph-heading" className="owid-section-heading">
             Relationship graph
           </h2>
           <p className="text-xs text-[var(--muted)]">
@@ -180,10 +180,8 @@ export function ClaimGraphPanel({ slug, initialGraph }: { slug: string; initialG
               type="button"
               aria-pressed={active}
               onClick={() => toggleGroup(g.types)}
-              className={`rounded-full border px-3 py-1 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
-                active
-                  ? "border-[var(--accent)] bg-[var(--accent)] text-white"
-                  : "border-[var(--border)] bg-white text-[var(--muted)]"
+              className={`owid-chip text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
+                active ? "owid-chip-active" : ""
               }`}
             >
               {g.label}
@@ -192,7 +190,7 @@ export function ClaimGraphPanel({ slug, initialGraph }: { slug: string; initialG
         })}
         <button
           type="button"
-          className="rounded-full border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)]"
+          className="owid-chip text-xs"
           onClick={showAllTypes}
         >
           All types
@@ -202,7 +200,7 @@ export function ClaimGraphPanel({ slug, initialGraph }: { slug: string; initialG
       {error && <p className="text-xs text-red-700">{error}</p>}
       {loading && <p className="text-xs text-[var(--muted)]">Updating graph…</p>}
 
-      <div className="h-[420px] overflow-hidden rounded-lg border border-[var(--border)] bg-white">
+      <div className="h-[420px] overflow-hidden border border-[var(--border)] bg-white">
         <ReactFlow
           nodes={nodes}
           edges={edges}

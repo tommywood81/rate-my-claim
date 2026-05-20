@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from app.core.config import get_settings
@@ -19,6 +20,7 @@ from app.services.ingestion.canonicalization_service import CanonicalizationServ
 from app.services.ingestion.claim_normalization import normalize_claim_text
 from app.services.ingestion.duplicate_detection_service import DuplicateDetectionService
 from app.services.ingestion.pipeline_audit import IngestionPipelineAudit
+from app.services.claims.live_claim_sync import sync_pending_to_linked_claim
 from app.services.evidence.ingestion_service import EvidenceIngestionService
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,35 @@ _TERMINAL = frozenset(
         ProcessingStatus.revision_requested,
     }
 )
+
+
+def _provisional_verdict_from_scores(scores: dict[str, Any]) -> dict[str, Any]:
+    """Structured verdict when no corpus evidence lines were retrieved."""
+    rationale = str(scores.get("rationale", "")).strip()
+    return {
+        "verdict_summary": rationale
+        or "No matching evidence in the archive; provisional assessment only.",
+        "citations": [],
+        "confidence_hint": float(scores.get("aggregate", 0.5) or 0.5),
+        "controversy_hint": 0.0,
+    }
+
+
+def _research_summary_from_scores(
+    scores: dict[str, Any],
+    *,
+    has_corpus_evidence: bool,
+) -> str:
+    """Public research summary: evidence-grounded digest, else confidence rationale."""
+    if has_corpus_evidence:
+        return ""
+    rationale = str(scores.get("rationale", "")).strip()
+    if rationale:
+        return rationale
+    return (
+        "No matching evidence was found in the archive. "
+        "A moderator can attach sources or re-run enrichment after more claims are indexed."
+    )
 
 
 async def _run_pipeline(pending_id: UUID) -> None:
@@ -53,6 +84,7 @@ async def _run_pipeline(pending_id: UUID) -> None:
             pending.normalized_claim_text = normalize_claim_text(pending.raw_claim_text)
             pending.processing_status = ProcessingStatus.embedding
             await session.flush()
+            await sync_pending_to_linked_claim(session, pending_id)
             await audit.log_stage(pending_id=pending_id, stage="embedding")
 
             vec, emb_model = await provider.generate_embedding(pending.raw_claim_text)
@@ -70,7 +102,9 @@ async def _run_pipeline(pending_id: UUID) -> None:
 
             dup_svc = DuplicateDetectionService(session, settings)
             pending.duplicate_candidate_ids = await dup_svc.find_duplicate_candidate_ids(
-                vec, pending_id=pending.id
+                vec,
+                pending_id=pending.id,
+                exclude_claim_id=pending.linked_claim_id,
             )
 
             pending.processing_status = ProcessingStatus.canonicalizing
@@ -80,30 +114,26 @@ async def _run_pipeline(pending_id: UUID) -> None:
             canon = await canon_svc.canonicalize(pending.raw_claim_text, provider)
             rejection = canon.get("rejection_reason")
             if rejection:
-                pending.canonical_candidate_text = None
-                pending.normalized_claim_text = normalize_claim_text(pending.raw_claim_text)
                 await ai_repo.add_analysis(
                     target_type="pending_claim",
                     target_id=pending.id,
                     model_name=settings.ai_model_cheap,
                     provider=provider.name,
-                    analysis_type="canonicalization_rejected",
+                    analysis_type="canonicalization_note",
                     generated_text=str(rejection),
                     structured_payload=canon,
                     created_by_job="enrichment",
                 )
-                pending.processing_status = ProcessingStatus.awaiting_moderation
-                pending.ai_summary = "Claim requires moderator review (automatic rejection hint)."
-                await audit.log_stage(
-                    pending_id=pending_id,
-                    stage="awaiting_moderation",
-                    details={"canonicalization_rejected": True},
-                )
-                await session.commit()
-                return
 
-            pending.canonical_candidate_text = str(canon.get("canonical_text", "")).strip()
-            pending.normalized_claim_text = str(canon.get("normalized_text", "")).strip()
+            canonical_text = str(canon.get("canonical_text", "")).strip()
+            if not canonical_text:
+                canonical_text = pending.raw_claim_text.strip()
+            pending.canonical_candidate_text = canonical_text
+            pending.normalized_claim_text = (
+                str(canon.get("normalized_text", "")).strip()
+                or normalize_claim_text(canonical_text)
+            )
+            await sync_pending_to_linked_claim(session, pending_id)
 
             pending.processing_status = ProcessingStatus.enriching
             await session.flush()
@@ -121,7 +151,12 @@ async def _run_pipeline(pending_id: UUID) -> None:
                     url_blocks.append(ingestion_svc.artifact_to_context_block(artifact))
 
             canonical = pending.canonical_candidate_text or pending.raw_claim_text
-            evidence_ctx = await repo.evidence_for_similar_claims(vec, limit=24)
+            evidence_ctx = await repo.evidence_for_similar_claims(
+                vec,
+                limit=24,
+                min_similarity=settings.enrichment_retrieval_min_similarity,
+                exclude_claim_id=pending.linked_claim_id,
+            )
             line_map: dict[int, dict[str, str]] = {}
             lines: list[str] = []
             idx = 1
@@ -141,21 +176,10 @@ async def _run_pipeline(pending_id: UUID) -> None:
                 line_map[idx] = {"kind": "url", **block}
                 idx += 1
 
-            context = "\n".join(lines) if lines else "(no retrieved context)"
-            verdict = await provider.structured_verdict(canonical, context)
-            await ai_repo.add_analysis(
-                target_type="pending_claim",
-                target_id=pending.id,
-                model_name=settings.ai_model_reasoning,
-                provider=provider.name,
-                analysis_type="structured_verdict",
-                generated_text=str(verdict.get("verdict_summary", "")),
-                structured_payload={"verdict": verdict, "line_map": line_map},
-                confidence=float(verdict.get("confidence_hint", 0.5) or 0.5),
-                created_by_job="enrichment",
-            )
+            has_corpus_evidence = bool(lines)
+            context = "\n".join(lines) if lines else "(no corpus evidence retrieved)"
+            digest = "\n".join(lines[:20]) if lines else "(no corpus evidence retrieved)"
 
-            digest = "\n".join(lines[:20])
             scores = await provider.generate_confidence_analysis(canonical, digest)
             await ai_repo.add_analysis(
                 target_type="pending_claim",
@@ -169,7 +193,31 @@ async def _run_pipeline(pending_id: UUID) -> None:
                 created_by_job="enrichment",
             )
 
-            summary = await provider.summarize_evidence(context[:8000])
+            if has_corpus_evidence:
+                verdict = await provider.structured_verdict(canonical, context)
+            else:
+                verdict = _provisional_verdict_from_scores(scores)
+            await ai_repo.add_analysis(
+                target_type="pending_claim",
+                target_id=pending.id,
+                model_name=settings.ai_model_reasoning,
+                provider=provider.name,
+                analysis_type="structured_verdict",
+                generated_text=str(verdict.get("verdict_summary", "")),
+                structured_payload={"verdict": verdict, "line_map": line_map},
+                confidence=float(verdict.get("confidence_hint", 0.5) or 0.5),
+                created_by_job="enrichment",
+            )
+
+            if has_corpus_evidence:
+                summary_input = (
+                    f"CLAIM UNDER REVIEW:\n{canonical}\n\n"
+                    f"NUMBERED EVIDENCE LINES (summarize only lines that bear on this claim; "
+                    f"if none apply, say no relevant evidence was found):\n{context[:7500]}"
+                )
+                summary = await provider.summarize_evidence(summary_input)
+            else:
+                summary = _research_summary_from_scores(scores, has_corpus_evidence=False)
             pending.ai_summary = summary
             pending.processing_status = ProcessingStatus.awaiting_moderation
             await audit.log_stage(
@@ -180,6 +228,7 @@ async def _run_pipeline(pending_id: UUID) -> None:
                     "url_blocks": len(url_blocks),
                 },
             )
+            await sync_pending_to_linked_claim(session, pending_id)
             await session.commit()
         except TokenBudgetExceeded as exc:
             logger.warning(
@@ -192,6 +241,7 @@ async def _run_pipeline(pending_id: UUID) -> None:
                 if p2:
                     p2.processing_status = ProcessingStatus.failed
                     p2.error_message = f"OpenAI token budget exceeded: {exc}"
+                    await sync_pending_to_linked_claim(session2, pending_id)
                     await session2.commit()
         except Exception as exc:
             logger.exception("enrichment_failed", extra={"pending_id": str(pending_id)})
@@ -201,6 +251,7 @@ async def _run_pipeline(pending_id: UUID) -> None:
                 if p2:
                     p2.processing_status = ProcessingStatus.failed
                     p2.error_message = str(exc)[:4000]
+                    await sync_pending_to_linked_claim(session2, pending_id)
                     await session2.commit()
 
 

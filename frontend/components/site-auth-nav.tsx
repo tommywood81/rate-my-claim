@@ -38,7 +38,7 @@ export function SiteAuthNav() {
   }
 
   const linkClass =
-    "rounded px-2 py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
+    "owid-nav-link focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
 
   if (me === undefined) {
     return <span className="inline-block min-w-[4rem] text-xs text-[var(--muted)]">…</span>;
@@ -46,11 +46,11 @@ export function SiteAuthNav() {
 
   if (me === null) {
     return (
-      <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-        <Link href="/login" className={`text-sm font-medium text-[var(--accent)] hover:underline ${linkClass}`}>
+      <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+        <Link href="/login" className={`${linkClass} font-semibold text-[var(--accent-dark)]`}>
           Sign in
         </Link>
-        <Link href="/register" className={`text-sm text-[var(--muted)] hover:text-[var(--fg)] ${linkClass}`}>
+        <Link href="/register" className={linkClass}>
           Register
         </Link>
       </div>
@@ -59,15 +59,11 @@ export function SiteAuthNav() {
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-sm">
-      <Link href={`/users/${me.id}`} className={`text-[var(--muted)] hover:text-[var(--fg)] ${linkClass}`}>
+      <Link href={`/users/${me.id}`} className={linkClass}>
         <span className="font-medium text-[var(--fg)]">{me.username}</span>
-        <span className="ml-1 text-xs">({me.role})</span>
+        <span className="ml-1 text-xs text-[var(--muted)]">({me.role})</span>
       </Link>
-      <button
-        type="button"
-        className={`text-[var(--accent)] underline-offset-2 hover:underline ${linkClass}`}
-        onClick={logout}
-      >
+      <button type="button" className={`${linkClass} cursor-pointer bg-transparent`} onClick={logout}>
         Sign out
       </button>
     </div>

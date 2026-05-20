@@ -1,0 +1,200 @@
+Cursor Prompt (UX + flow update only, minimal structural change)
+
+You are a principal full-stack engineer working inside an already fully implemented production-grade system: “Rate My Claim”.
+
+CRITICAL CONSTRAINTS (NON-NEGOTIABLE)
+
+DO NOT:
+
+change the existing backend architecture
+change Celery pipeline structure
+change database schema beyond minimal additive fields
+replace pending vs claim tables
+remove moderation system
+introduce new services or microservices
+redesign core data model
+
+ONLY:
+
+adjust workflow semantics
+adjust status handling
+adjust UX flow
+adjust visibility rules
+reuse existing endpoints, tables, and workers
+
+This is a behavioral + UX evolution, NOT a rebuild.
+
+GOAL
+
+We are changing the system from:
+
+“claims are blocked until moderator approval”
+
+to:
+
+“claims are immediately live as evolving objects, and moderation becomes continuous correction rather than a gate”
+
+BUT we must preserve existing architecture and data structures.
+
+REQUIRED CHANGES (MINIMAL AND SAFE)
+1. AUTOMATIC PUBLIC VISIBILITY (NO MODERATOR GATE)
+
+Change system behavior so that:
+
+After submission, a claim is immediately visible in the public claims system
+It should appear in /claims/[id] as soon as it is created
+It does NOT wait for moderator approval to be visible
+
+IMPORTANT:
+
+Do NOT remove moderation system
+Do NOT remove pending_claim pipeline
+Do NOT bypass enrichment pipeline
+
+We are ONLY changing visibility rules.
+
+2. CLAIM LIFECYCLE BECOMES STATE-BASED (NOT GATE-BASED)
+
+Reuse existing fields (status, processing_status) and extend semantics only.
+
+Map current pipeline states into:
+
+processing → claim is live but “Analyzing”
+analyzed → AI enrichment complete
+moderated → human has reviewed (optional refinement, NOT required for visibility)
+revised → moderator edits applied
+
+IMPORTANT:
+
+Do NOT create new tables
+Do NOT split into separate systems
+3. MODERATION BECOMES OVERLAY SYSTEM (NOT APPROVAL SYSTEM)
+
+Modify moderation behavior:
+
+Moderator actions update claim state and metadata
+They can:
+edit canonical claim text
+adjust classification
+modify evidence weights
+mark claim as disputed/verified/insufficient
+
+BUT:
+
+moderation does NOT control whether claim is visible
+
+Moderation becomes:
+
+continuous refinement layer on top of live system
+
+4. UX CHANGE: REMOVE “PENDING PURGATORY”
+
+Current issue:
+
+users submit claim
+they see nothing meaningful until moderation completes
+
+Fix:
+
+After submission:
+
+Redirect immediately to:
+
+/claims/[id]
+
+This page must always exist immediately.
+
+It should show:
+
+claim text
+processing status
+live pipeline stage
+evolving AI summary when available
+
+NO separate “pending-only UX page”.
+
+5. LIVE STATUS EXPERIENCE
+
+On /claims/[id]:
+
+Show pipeline state as:
+
+Received
+Analyzing
+Gathering evidence
+Evaluating contradictions
+Complete (AI)
+Moderated (if applicable)
+
+This is purely UI state mapping from existing processing_status.
+
+6. CLAIMS BECOME LIVE OBJECTS IMMEDIATELY
+
+When a claim is created in pending_claims or existing claim table:
+
+It must be queryable in public endpoints immediately
+It must appear in browse lists with status label:
+“Processing”
+“Live (unverified)”
+“Live (verified)”
+
+DO NOT hide based on moderation state.
+
+7. MODERATION QUEUE SIMPLIFICATION
+
+Keep /moderation exactly as-is, but update semantics:
+
+it becomes a “review + edit queue”
+NOT an approval gate
+moderators see already-live claims
+they can refine or flag issues
+8. BACKWARD COMPATIBILITY REQUIREMENT
+ALL existing endpoints must continue to work
+ALL Celery tasks remain unchanged
+ALL enrichment pipeline steps remain unchanged
+NO schema migrations unless strictly additive fields are required
+
+If a change is needed, prefer:
+
+interpretation layer changes
+service-layer logic changes
+API response transformation
+
+NOT database redesign.
+
+9. IMPLEMENTATION STRATEGY
+
+Only modify:
+
+claim visibility logic in API layer
+status mapping layer
+moderation action handlers (soft edits instead of gating)
+frontend routing after submit
+claim page rendering logic for live states
+
+DO NOT TOUCH:
+
+embedding pipeline
+evidence collection system
+worker orchestration
+core schema design
+FINAL GOAL
+
+We are evolving the system into:
+
+a live epistemic graph where claims are immediately visible, continuously enriched, and iteratively refined by AI + humans
+
+NOT:
+
+a gated publishing system
+a moderation-first pipeline
+a pending approval workflow
+ACCEPTANCE CRITERIA
+Claim appears publicly immediately after submission
+/claims/[id] is the primary UX entry point
+Moderation no longer blocks visibility
+Pipeline still runs asynchronously via Celery unchanged
+No architecture refactor occurred
+Only behavior + UI semantics changed
+
+If anything requires structural change, STOP and ask before implementing.

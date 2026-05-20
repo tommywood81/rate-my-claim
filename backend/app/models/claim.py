@@ -115,6 +115,9 @@ class PendingClaim(Base, TimestampMixin):
     duplicate_candidate_ids: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     source_urls: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    linked_claim_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("claims.id", ondelete="SET NULL"), nullable=True
+    )
 
     submitted_by_user: Mapped["User"] = relationship("User", foreign_keys=[submitted_by])
 

@@ -154,6 +154,16 @@ class Settings(BaseSettings):
     search_max_candidates: int = Field(default=120, ge=20, le=500, alias="SEARCH_MAX_CANDIDATES")
 
     duplicate_vector_threshold: float = Field(default=0.92, ge=0.0, le=1.0)
+    enrichment_retrieval_min_similarity: float = Field(
+        default=0.72,
+        ge=0.0,
+        le=1.0,
+        alias="ENRICHMENT_RETRIEVAL_MIN_SIMILARITY",
+        description=(
+            "Minimum cosine similarity (1 - distance) to attach another claim's evidence "
+            "during pending enrichment. Prevents unrelated nearest-neighbor bleed."
+        ),
+    )
     hybrid_semantic_weight: float = 0.35
     hybrid_fts_weight: float = 0.25
     hybrid_evidence_weight: float = 0.15

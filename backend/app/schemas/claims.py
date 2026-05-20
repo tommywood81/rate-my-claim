@@ -20,6 +20,14 @@ class ResubmitPendingRequest(BaseModel):
     source_urls: list[str] | None = Field(default=None, max_length=20)
 
 
+class DuplicateHintResponse(BaseModel):
+    """Resolved duplicate candidate for moderator UI."""
+
+    id: str
+    slug: str | None = None
+    title: str | None = None
+
+
 class PendingClaimResponse(BaseModel):
     """Pipeline state for a submitted claim."""
 
@@ -29,8 +37,10 @@ class PendingClaimResponse(BaseModel):
     canonical_candidate_text: str | None
     ai_summary: str | None
     duplicate_candidate_ids: list[str] | None
+    duplicate_hints: list[DuplicateHintResponse] | None = None
     source_urls: list[str] | None = None
     error_message: str | None = None
+    public_slug: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -47,6 +57,8 @@ class ClaimListItemResponse(BaseModel):
     evidence_count: int
     discovery_score: int
     updated_at: datetime
+    processing_status: str | None = None
+    visibility_label: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -99,6 +111,12 @@ class ClaimDetailResponse(BaseModel):
     evidence_contextual: list[EvidenceResponse]
     ai_analyses: list[AIAnalysisResponse]
     related_slugs: list[str]
+    processing_status: str | None = None
+    pipeline_stage_key: str | None = None
+    pipeline_stage_label: str | None = None
+    live_ai_summary: str | None = None
+    visibility_label: str | None = None
+    moderation_reviewed: bool = False
 
     model_config = {"from_attributes": True}
 

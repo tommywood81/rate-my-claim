@@ -11,6 +11,7 @@ PENDING_MODERATOR_ACTIONS: dict[ProcessingStatus, frozenset[ProcessingStatus]] =
             ProcessingStatus.completed,
             ProcessingStatus.rejected,
             ProcessingStatus.revision_requested,
+            ProcessingStatus.submitted,
         }
     ),
     ProcessingStatus.revision_requested: frozenset(

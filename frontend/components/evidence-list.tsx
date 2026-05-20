@@ -9,25 +9,19 @@ type EvidenceListProps = {
 export function EvidenceList({ title, items, variant = "default" }: EvidenceListProps) {
   if (!items.length) return null;
 
-  const cardClass =
-    variant === "prominent"
-      ? "rounded-lg border border-[var(--border)] bg-white p-4 shadow-sm"
-      : "rounded border border-[var(--border)] bg-white p-3";
+  const cardClass = variant === "prominent" ? "owid-card p-4 sm:p-5" : "owid-card p-3";
 
   const slug = title.replace(/\s+/g, "-").toLowerCase();
 
   return (
     <section aria-labelledby={`evidence-${slug}`}>
-      <h3
-        id={`evidence-${slug}`}
-        className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]"
-      >
+      <h3 id={`evidence-${slug}`} className="owid-kicker">
         {title} ({items.length})
       </h3>
       <ul className="mt-3 space-y-3">
         {items.map((e) => (
           <li key={e.id} className={cardClass}>
-            <h4 className="font-medium leading-snug text-[var(--fg)]">
+            <h4 className="font-medium leading-snug text-[var(--accent-dark)]">
               {e.url ? (
                 <a href={e.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
                   {e.title}

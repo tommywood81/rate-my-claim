@@ -14,8 +14,9 @@ export default async function LoginPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Sign in</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
+        <p className="owid-kicker">Account</p>
+        <h1 className="owid-page-heading text-3xl">Sign in</h1>
+        <p className="mt-2 text-sm text-[var(--muted)]">
           Use a moderator or admin account for moderation and generating AI analysis on claims. Session uses secure
           cookies on this site.
         </p>

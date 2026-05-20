@@ -2,9 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 
+type SubmitResponse = {
+  id: string;
+  public_slug?: string | null;
+};
+
 export default function SubmitPage() {
+  const router = useRouter();
   const [text, setText] = useState("");
   const [urls, setUrls] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -33,13 +40,16 @@ export default function SubmitPage() {
         .split("\n")
         .map((s) => s.trim())
         .filter(Boolean);
-      const data = await apiFetch<{ id: string }>("/api/v1/pending-claims", {
+      const data = await apiFetch<SubmitResponse>("/api/v1/pending-claims", {
         method: "POST",
         body: JSON.stringify({ raw_claim_text: text, source_urls: list }),
       });
+      if (data.public_slug) {
+        router.push(`/claims/${encodeURIComponent(data.public_slug)}`);
+        return;
+      }
       setMsg(
-        `Queued submission ${data.id}. It enters the moderation queue after background enrichment. ` +
-          `Sign in to link submissions to your account and resubmit after revision requests.`,
+        `Submission received (${data.id}). Open your claim page from Browse once processing links a public slug.`,
       );
       setText("");
       setUrls("");
@@ -49,13 +59,16 @@ export default function SubmitPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <h1 className="text-xl font-semibold">Submit a claim</h1>
-      <p className="text-sm text-[var(--muted)]">
-        Anyone can submit. Claims should be atomic, empirical, and falsifiable. Optional URLs are fetched during
-        enrichment for structured citations.
+    <div className="max-w-2xl space-y-8">
+      <header className="space-y-3 border-b border-[var(--border)] pb-6">
+        <p className="owid-kicker">Contribute</p>
+        <h1 className="owid-page-heading text-3xl">Submit a claim</h1>
+      </header>
+      <p className="owid-lead text-base">
+        Anyone can submit. Your claim goes live immediately; research and evidence enrich the page in the background.
+        Moderators refine claims over time rather than blocking publication.
       </p>
-      <p className="rounded border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--muted)]">
+      <p className="owid-card px-4 py-3 text-sm text-[var(--muted)]">
         <span className="font-medium text-[var(--fg)]">Signed in?</span> Submissions are linked to your account so you
         can track status and resubmit after revision requests.{" "}
         <Link href="/login?next=/submit" className="text-[var(--accent)] hover:underline">
@@ -74,19 +87,19 @@ export default function SubmitPage() {
           required
           minLength={10}
           rows={6}
-          className="w-full rounded border border-[var(--border)] p-3 text-sm"
+          className="owid-input w-full p-3 text-sm"
           placeholder="State one clear empirical claim…"
         />
         <textarea
           value={urls}
           onChange={(e) => setUrls(e.target.value)}
           rows={4}
-          className="w-full rounded border border-[var(--border)] p-3 font-mono text-xs"
+          className="owid-input w-full p-3 font-mono text-xs"
           placeholder="Optional source URLs, one per line"
         />
         <button
           type="submit"
-          className="rounded bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-95 disabled:opacity-60"
+          className="owid-btn-primary disabled:opacity-60"
           disabled={!csrfReady}
         >
           Submit for enrichment
