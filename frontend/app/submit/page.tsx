@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { submitStatusMessage } from "@/lib/research-pipeline-ux";
 
 type SubmitResponse = {
   id: string;
@@ -16,6 +17,11 @@ export default function SubmitPage() {
   const [urls, setUrls] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [csrfReady, setCsrfReady] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState(0);
+  const [submitStep, setSubmitStep] = useState(0);
+  const [submitStartedAt, setSubmitStartedAt] = useState<number | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
 
   useEffect(() => {
     void (async () => {
@@ -28,6 +34,27 @@ export default function SubmitPage() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (!isSubmitting) return;
+    const interval = setInterval(() => {
+      setSubmitProgress((prev) => {
+        const next = Math.min(prev + 6, 92);
+        if (next >= 24) setSubmitStep(1);
+        if (next >= 52) setSubmitStep(2);
+        return next;
+      });
+    }, 240);
+    return () => clearInterval(interval);
+  }, [isSubmitting]);
+
+  useEffect(() => {
+    if (!isSubmitting || submitStartedAt === null) return;
+    const interval = setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - submitStartedAt) / 1000));
+    }, 250);
+    return () => clearInterval(interval);
+  }, [isSubmitting, submitStartedAt]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
@@ -35,6 +62,11 @@ export default function SubmitPage() {
       setMsg("Preparing secure session… try again in a moment.");
       return;
     }
+    setIsSubmitting(true);
+    setSubmitProgress(8);
+    setSubmitStep(0);
+    setSubmitStartedAt(Date.now());
+    setElapsedSec(0);
     try {
       const list = urls
         .split("\n")
@@ -45,7 +77,14 @@ export default function SubmitPage() {
         body: JSON.stringify({ raw_claim_text: text, source_urls: list }),
       });
       if (data.public_slug) {
-        router.push(`/claims/${encodeURIComponent(data.public_slug)}`);
+        setSubmitStep(3);
+        setSubmitProgress(100);
+        try {
+          sessionStorage.setItem("rmc_just_submitted_slug", data.public_slug);
+        } catch {
+          /* private mode */
+        }
+        router.push(`/claims/${encodeURIComponent(data.public_slug)}?submitted=1`);
         return;
       }
       setMsg(
@@ -55,6 +94,12 @@ export default function SubmitPage() {
       setUrls("");
     } catch (err: unknown) {
       setMsg(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setIsSubmitting(false);
+      setSubmitProgress(0);
+      setSubmitStep(0);
+      setSubmitStartedAt(null);
+      setElapsedSec(0);
     }
   }
 
@@ -84,6 +129,7 @@ export default function SubmitPage() {
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
+          disabled={isSubmitting}
           required
           minLength={10}
           rows={6}
@@ -93,6 +139,7 @@ export default function SubmitPage() {
         <textarea
           value={urls}
           onChange={(e) => setUrls(e.target.value)}
+          disabled={isSubmitting}
           rows={4}
           className="owid-input w-full p-3 font-mono text-xs"
           placeholder="Optional source URLs, one per line"
@@ -100,10 +147,42 @@ export default function SubmitPage() {
         <button
           type="submit"
           className="owid-btn-primary disabled:opacity-60"
-          disabled={!csrfReady}
+          disabled={!csrfReady || isSubmitting}
         >
-          Submit for enrichment
+          {isSubmitting ? "Submitting..." : "Submit for enrichment"}
         </button>
+        {isSubmitting && (
+          <div className="space-y-2 rounded border border-[var(--border)] bg-[var(--bg-subtle)] p-3">
+            <div className="flex items-center justify-between gap-3 text-xs text-[var(--muted)]">
+              <div className="flex items-center gap-2">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[var(--accent)]" />
+                <span>Working on your claim...</span>
+              </div>
+              <span>{elapsedSec}s</span>
+            </div>
+            <div
+              className="h-2 overflow-hidden rounded bg-white"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={submitProgress}
+              aria-label="Submission progress"
+            >
+              <div
+                className="h-full bg-[var(--accent)] transition-all duration-300"
+                style={{ width: `${submitProgress}%` }}
+              />
+            </div>
+            <div className="h-1 w-full overflow-hidden rounded bg-white/70">
+              <div className="h-full w-1/3 animate-pulse bg-[var(--accent)]/60" />
+            </div>
+            <p className="text-sm text-[var(--muted)]">{submitStatusMessage(elapsedSec, submitStep)}</p>
+            <p className="text-xs text-[var(--muted)]">
+              Next: the claim page will show live progress for the research agent (evidence) and
+              decision agent (scores and verdict).
+            </p>
+          </div>
+        )}
       </form>
       {msg && <p className="text-sm text-[var(--muted)]">{msg}</p>}
     </div>

@@ -34,8 +34,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-export default async function ClaimPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function ClaimPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ submitted?: string }>;
+}) {
   const { slug } = await params;
+  const { submitted } = await searchParams;
   const [d, graph, timeline] = await Promise.all([load(slug), loadGraph(slug), loadTimeline(slug)]);
   if (!d) {
     return (
@@ -45,5 +52,13 @@ export default async function ClaimPage({ params }: { params: Promise<{ slug: st
     );
   }
 
-  return <ClaimPageClient slug={slug} initial={d} graph={graph} timeline={timeline} />;
+  return (
+    <ClaimPageClient
+      slug={slug}
+      initial={d}
+      graph={graph}
+      timeline={timeline}
+      justSubmitted={submitted === "1"}
+    />
+  );
 }

@@ -7,7 +7,9 @@ import { AiAnalysisList } from "@/components/ai-analysis-list";
 import { ClaimPipelineStepper } from "@/components/claim-pipeline-stepper";
 import { ClaimTimeline } from "@/components/claim-timeline";
 import { EvidenceList } from "@/components/evidence-list";
+import { ResearchPipelineProgress } from "@/components/research-pipeline-progress";
 import { apiFetch } from "@/lib/api";
+import { claimPollingHint } from "@/lib/research-pipeline-ux";
 import type { ClaimDetail, ClaimGraph, ClaimTimeline as ClaimTimelineData } from "@/lib/types";
 
 import { ClaimAiAnalysisPanel } from "@/app/claims/[slug]/claim-ai-panel";
@@ -29,6 +31,7 @@ type Props = {
   initial: ClaimDetail;
   graph: ClaimGraph | null;
   timeline: ClaimTimelineData | null;
+  justSubmitted?: boolean;
 };
 
 function pollIntervalMs(status: string | null | undefined): number {
@@ -41,10 +44,13 @@ function pollIntervalMs(status: string | null | undefined): number {
   return 0;
 }
 
-export function ClaimPageClient({ slug, initial, graph, timeline }: Props) {
+export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted = false }: Props) {
   const [detail, setDetail] = useState(initial);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [pageElapsedSec, setPageElapsedSec] = useState(0);
+  const [showSubmittedBanner, setShowSubmittedBanner] = useState(justSubmitted);
+  const pageStartedAt = useRef(Date.now());
   const detailRef = useRef(detail);
   detailRef.current = detail;
 
@@ -65,6 +71,19 @@ export function ClaimPageClient({ slug, initial, graph, timeline }: Props) {
     setDetail(initial);
     setLastUpdated(new Date());
   }, [initial]);
+
+  useEffect(() => {
+    if (justSubmitted) return;
+    try {
+      const flagged = sessionStorage.getItem("rmc_just_submitted_slug");
+      if (flagged === slug) {
+        setShowSubmittedBanner(true);
+        sessionStorage.removeItem("rmc_just_submitted_slug");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [slug, justSubmitted]);
 
   useEffect(() => {
     const proc = initial.processing_status;
@@ -88,10 +107,27 @@ export function ClaimPageClient({ slug, initial, graph, timeline }: Props) {
     return () => clearInterval(id);
   }, [detail.processing_status, refresh]);
 
+  useEffect(() => {
+    const proc = detail.processing_status;
+    const stillRunning = proc && (ACTIVE_PIPELINE.has(proc) || proc === "awaiting_moderation");
+    if (!stillRunning) return;
+    const id = setInterval(() => {
+      setPageElapsedSec(Math.floor((Date.now() - pageStartedAt.current) / 1000));
+    }, 500);
+    return () => clearInterval(id);
+  }, [detail.processing_status]);
+
+  useEffect(() => {
+    if (!showSubmittedBanner) return;
+    const id = setTimeout(() => setShowSubmittedBanner(false), 12000);
+    return () => clearTimeout(id);
+  }, [showSubmittedBanner]);
+
   const proc = detail.processing_status;
   const inActivePipeline = proc ? ACTIVE_PIPELINE.has(proc) : false;
   const awaitingAi = proc === "awaiting_moderation";
   const processing = proc && !TERMINAL.has(proc);
+  const pollingHint = claimPollingHint(pageElapsedSec, proc);
 
   const totalEvidence =
     detail.evidence_supporting.length +
@@ -126,14 +162,29 @@ export function ClaimPageClient({ slug, initial, graph, timeline }: Props) {
         )}
       </header>
 
-      <section className="owid-panel-live space-y-3" aria-live="polite">
+      {showSubmittedBanner && (
+        <p className="owid-card border-l-4 border-l-[var(--accent)] px-4 py-3 text-sm text-[var(--fg)]">
+          Submission received. Your claim is <strong>live</strong> — watch the research agent gather evidence
+          and the decision agent produce scores and a verdict below.
+        </p>
+      )}
+
+      <section className="owid-panel-live space-y-4" aria-live="polite">
+        {(processing || awaitingAi || showSubmittedBanner) && (
+          <ResearchPipelineProgress
+            processingStatus={proc ?? "awaiting_moderation"}
+            elapsedSec={inActivePipeline ? pageElapsedSec : undefined}
+            pollingHint={pollingHint}
+          />
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-medium text-[var(--fg)]">
             {inActivePipeline && (
               <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-[var(--accent)]" />
             )}
             {inActivePipeline
-              ? "Research in progress"
+              ? "Research & decision agents running"
               : awaitingAi
                 ? "Automated research complete"
                 : "Live claim"}
@@ -160,9 +211,9 @@ export function ClaimPageClient({ slug, initial, graph, timeline }: Props) {
             <ClaimPipelineStepper currentKey={detail.pipeline_stage_key} pulsing={inActivePipeline} />
             <p className="text-xs text-[var(--muted)]">
               {inActivePipeline
-                ? "This page refreshes every few seconds while analysis runs."
+                ? "This page refreshes every few seconds while the research and decision agents work."
                 : awaitingAi
-                  ? "Background research is done. A moderator may still refine evidence and scores."
+                  ? "Research and AI decision passes are done. A moderator may still refine evidence and scores."
                   : "This claim is live; review may continue over time."}
             </p>
           </>
