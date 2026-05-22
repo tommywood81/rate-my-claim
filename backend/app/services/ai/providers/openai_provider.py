@@ -229,8 +229,9 @@ class OpenAIProvider(BaseAIProvider):
             "When the digest says no archive evidence matched, you MUST still judge factual "
             "claims using well-established public knowledge (e.g. commodity prices, physics). "
             "Do not invent citations. Use evidence_quality 0.1-0.35 when the archive is empty. "
-            "Do not default aggregate to 0.5; use high aggregate when you are confident in "
-            "supported or refuted. Use unclear only when genuinely uncertain."
+            "Do not default aggregate to 0.5. When truth_label is supported or refuted for "
+            "well-known facts, set aggregate to 0.85 or higher. Use unclear only when genuinely "
+            "uncertain, with aggregate near 0.5."
         )
         model = model_for_operation(self._settings, "generate_confidence_analysis")
         return await self._chat_json(

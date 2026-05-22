@@ -257,6 +257,15 @@ async def claim_detail(
     live = await build_claim_live_context(db, claim=claim, pending=pending)
     ai_out = dedupe_public_ai_analyses(merge_ai_analyses(ai_out, live.pending_ai_analyses))
 
+    from app.services.claims.claim_assessment import resolve_public_claim_scores
+
+    pending_rows = (
+        await ai_repo.list_for_target("pending_claim", pending.id) if pending is not None else None
+    )
+    confidence_score, controversy_score, evidence_score = resolve_public_claim_scores(
+        claim, pending_analyses=pending_rows
+    )
+
     related: list[str] = []
     if claim.embedding is not None:
         sim = await repo.vector_similar_claims(claim.embedding, limit=12, exclude_id=claim.id)
@@ -268,9 +277,9 @@ async def claim_detail(
         public_slug=claim.public_slug,
         canonical_claim_text=claim.canonical_claim_text,
         status=str(claim.status),
-        confidence_score=float(claim.confidence_score),
-        controversy_score=float(claim.controversy_score),
-        evidence_score=float(claim.evidence_score),
+        confidence_score=confidence_score,
+        controversy_score=controversy_score,
+        evidence_score=evidence_score,
         freshness_score=float(claim.freshness_score),
         evidence_count=claim.evidence_count,
         discovery_score=claim.discovery_score,

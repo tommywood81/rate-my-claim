@@ -120,22 +120,13 @@ class ModerationService:
             self._session.add(claim)
             pending.linked_claim_id = claim.id
 
-        confidence = float(claim.confidence_score or 0.0)
-        controversy = float(claim.controversy_score or 0.0)
-        for row in analyses:
-            if row.analysis_type == "confidence_analysis" and row.structured_payload:
-                try:
-                    data = json.loads(row.structured_payload)
-                    confidence = float(data.get("aggregate", 0.0) or 0.0)
-                except (json.JSONDecodeError, TypeError, ValueError):
-                    continue
-            if row.analysis_type == "structured_verdict" and row.structured_payload:
-                try:
-                    bundle = json.loads(row.structured_payload)
-                    verdict = bundle.get("verdict", {}) or {}
-                    controversy = float(verdict.get("controversy_hint", 0.0) or 0.0)
-                except (json.JSONDecodeError, TypeError, ValueError):
-                    continue
+        from app.services.claims.claim_assessment import scores_from_pending_analyses
+
+        confidence, controversy, evidence_quality = scores_from_pending_analyses(analyses)
+        if confidence <= 0 and not analyses:
+            confidence = float(claim.confidence_score or 0.0)
+            controversy = float(claim.controversy_score or 0.0)
+            evidence_quality = float(claim.evidence_score or 0.0)
 
         claim.canonical_claim_text = canonical
         claim.normalized_claim_text = pending.normalized_claim_text or canonical
@@ -145,6 +136,7 @@ class ModerationService:
         claim.embedding_at = pending.embedding_at
         claim.confidence_score = confidence
         claim.controversy_score = controversy
+        claim.evidence_score = evidence_quality
         claim.last_reviewed_at = datetime.now(tz=UTC)
 
         verdict_bundle: dict | None = None
@@ -207,7 +199,8 @@ class ModerationService:
 
         await self._session.flush()
         claim.evidence_count = evidence_added
-        claim.evidence_score = min(1.0, 0.2 * evidence_added)
+        citation_score = min(1.0, 0.2 * evidence_added)
+        claim.evidence_score = max(claim.evidence_score, citation_score)
         if evidence_added > 0:
             claim.status = ClaimStatus.weak_evidence.value
 

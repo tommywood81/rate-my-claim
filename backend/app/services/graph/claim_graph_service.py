@@ -11,7 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.claim import Claim, ClaimRelationship, RelationshipType
 from app.models.evidence import Evidence, EvidenceStance
+from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.repositories.graph_repository import GraphRepository
+from app.services.claims.claim_assessment import resolve_public_claim_scores
+from app.services.claims.live_claim_sync import get_pending_for_claim
 from app.schemas.graph import (
     ClaimGraphResponse,
     GraphEdge,
@@ -98,6 +101,7 @@ class ClaimGraphService:
                     seen_edge_ids.add(edge.id)
 
         claims_map = await self._load_claims(claim_ids)
+        display_scores = await self._display_scores_for_claims(claims_map)
         positions = layout_nodes(focus.id, claim_ids)
 
         nodes: list[GraphNode] = []
@@ -105,6 +109,9 @@ class ClaimGraphService:
             claim = claims_map.get(cid)
             if claim is None:
                 continue
+            conf, _, _ = display_scores.get(
+                cid, (float(claim.confidence_score), 0.0, 0.0)
+            )
             nodes.append(
                 GraphNode(
                     id=str(cid),
@@ -114,7 +121,7 @@ class ClaimGraphService:
                         label=_truncate_label(claim.canonical_claim_text),
                         slug=claim.public_slug,
                         is_focus=cid == focus.id,
-                        confidence_score=claim.confidence_score,
+                        confidence_score=conf,
                     ),
                 )
             )
@@ -164,6 +171,20 @@ class ClaimGraphService:
         stmt = select(Claim).where(Claim.id.in_(claim_ids), Claim.deleted_at.is_(None))
         rows = (await self._session.execute(stmt)).scalars().all()
         return {r.id: r for r in rows}
+
+    async def _display_scores_for_claims(
+        self, claims_map: dict[UUID, Claim]
+    ) -> dict[UUID, tuple[float, float, float]]:
+        """Public scores for graph nodes (same merge as claim detail API)."""
+        ai_repo = AIAnalysisRepository(self._session)
+        out: dict[UUID, tuple[float, float, float]] = {}
+        for cid, claim in claims_map.items():
+            pending = await get_pending_for_claim(self._session, cid)
+            pending_rows = (
+                await ai_repo.list_for_target("pending_claim", pending.id) if pending else None
+            )
+            out[cid] = resolve_public_claim_scores(claim, pending_analyses=pending_rows)
+        return out
 
     async def _evidence_clusters(
         self, focus: Claim, positions: dict[UUID, GraphPosition]

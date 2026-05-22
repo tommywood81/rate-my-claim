@@ -72,7 +72,11 @@ function ClaimNode({ data }: { data: Record<string, unknown> }) {
       ) : (
         <p className="font-medium leading-snug">{label}</p>
       )}
-      {confidence != null && <p className="mt-1 text-[var(--muted)]">conf {confidence.toFixed(2)}</p>}
+      {confidence != null && (
+        <p className="mt-1 text-[var(--muted)]" title="Assessment confidence">
+          assess {confidence.toFixed(2)}
+        </p>
+      )}
     </div>
   );
 }

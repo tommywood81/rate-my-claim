@@ -22,6 +22,20 @@ def _parse_json_payload(raw: str | dict[str, Any] | None) -> dict[str, Any]:
         return {}
 
 
+def assessment_confidence_score(data: dict[str, Any]) -> float:
+    """
+    Public confidence = how sure we are of the assessment (truth_label), not P(claim is true).
+
+    Models often return truth_label refuted/supported with aggregate stuck at 0.5; align the
+    displayed score when the verdict is definite but the numeric hedge remains at 0.5.
+    """
+    aggregate = float(data.get("aggregate", 0) or 0)
+    label = str(data.get("truth_label", "")).strip().lower()
+    if label in ("supported", "refuted") and aggregate <= 0.55:
+        return 0.82
+    return aggregate
+
+
 def scores_from_pending_analyses(analyses: list) -> tuple[float, float, float]:
     """Return (confidence, controversy, evidence_score) from enrichment analyses."""
     confidence = 0.0
@@ -31,7 +45,7 @@ def scores_from_pending_analyses(analyses: list) -> tuple[float, float, float]:
     for row in analyses:
         if row.analysis_type == "confidence_analysis" and row.structured_payload:
             data = _parse_json_payload(row.structured_payload)
-            confidence = float(data.get("aggregate", confidence) or confidence)
+            confidence = assessment_confidence_score(data)
             evidence_score = float(data.get("evidence_quality", evidence_score) or evidence_score)
             hint = float(data.get("controversy_hint", 0.0) or 0.0)
             if hint > controversy:
@@ -49,6 +63,24 @@ def scores_from_pending_analyses(analyses: list) -> tuple[float, float, float]:
                     confidence = v_conf
 
     return confidence, controversy, evidence_score
+
+
+def resolve_public_claim_scores(
+    claim: object,
+    *,
+    pending_analyses: list | None = None,
+) -> tuple[float, float, float]:
+    """Merge stored claim scores with linked pending enrichment analyses when present."""
+    confidence = float(getattr(claim, "confidence_score", 0) or 0)
+    controversy = float(getattr(claim, "controversy_score", 0) or 0)
+    evidence_score = float(getattr(claim, "evidence_score", 0) or 0)
+    if not pending_analyses:
+        return confidence, controversy, evidence_score
+    has_confidence = any(row.analysis_type == "confidence_analysis" for row in pending_analyses)
+    if not has_confidence:
+        return confidence, controversy, evidence_score
+    pc, pco, pev = scores_from_pending_analyses(pending_analyses)
+    return pc, max(controversy, pco), max(evidence_score, pev)
 
 
 def truth_label_from_analyses(

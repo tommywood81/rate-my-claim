@@ -142,7 +142,9 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
         <h1 className="owid-page-heading text-3xl sm:text-4xl">{detail.canonical_claim_text}</h1>
         <dl className="owid-stat-grid">
           <div className="owid-stat">
-            <dt>Confidence</dt>
+            <dt title="How confident the automated assessment is in its verdict — not the probability the claim is true">
+              Assessment confidence
+            </dt>
             <dd>{detail.confidence_score.toFixed(2)}</dd>
           </div>
           <div className="owid-stat">

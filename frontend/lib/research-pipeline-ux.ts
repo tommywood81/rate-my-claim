@@ -1,11 +1,31 @@
 /** User-facing copy and progress for live research / decision pipeline. */
 
+import type { ClaimDetail } from "@/lib/types";
+
+export const PIPELINE_STAGES = [
+  { key: "received", label: "Received", hint: "Claim registered and published live." },
+  { key: "analyzing", label: "Analyzing", hint: "Embedding, duplicate check, and canonical wording." },
+  { key: "gathering_evidence", label: "Gathering evidence", hint: "Archive search, URLs, and research pass." },
+  { key: "ai_complete", label: "Complete (AI)", hint: "Provisional verdict ready; moderation may refine." },
+  { key: "moderated", label: "Moderated", hint: "A moderator has reviewed this claim." },
+] as const;
+
+export type PipelineStageKey = (typeof PIPELINE_STAGES)[number]["key"];
+
 export const SUBMIT_STEP_LABELS = [
   "Validating claim text",
   "Creating live claim page",
   "Queueing research & decision agents",
   "Opening your live claim",
 ] as const;
+
+export const PIPELINE_TERMINAL = new Set([
+  "awaiting_moderation",
+  "completed",
+  "failed",
+  "rejected",
+  "revision_requested",
+]);
 
 export type PipelineAgentState = {
   overallPercent: number;
@@ -24,6 +44,39 @@ const DEFAULT_IDLE: PipelineAgentState = {
   decisionLabel: "Idle",
   detailMessage: "Pipeline not started.",
 };
+
+/** Mirror backend pipeline_labels.processing_status → stepper key. */
+export function processingStatusToStageKey(
+  processingStatus: string | null | undefined,
+): PipelineStageKey | null {
+  switch (processingStatus) {
+    case "submitted":
+      return "received";
+    case "embedding":
+    case "duplicate_check":
+    case "canonicalizing":
+      return "analyzing";
+    case "enriching":
+      return "gathering_evidence";
+    case "awaiting_moderation":
+      return "ai_complete";
+    case "completed":
+      return "moderated";
+    case "revision_requested":
+      return "revised" as PipelineStageKey;
+    case "failed":
+      return "failed" as PipelineStageKey;
+    case "rejected":
+      return "rejected" as PipelineStageKey;
+    default:
+      return null;
+  }
+}
+
+export function pipelineStageIndex(stageKey: string | null | undefined): number {
+  if (!stageKey) return -1;
+  return PIPELINE_STAGES.findIndex((s) => s.key === stageKey);
+}
 
 /** Map backend processing_status to dual-agent progress (frontend-only). */
 export function pipelineAgentState(processingStatus: string | null | undefined): PipelineAgentState {
@@ -125,7 +178,109 @@ export function pipelineAgentState(processingStatus: string | null | undefined):
   }
 }
 
-/** Submit-form status line with elapsed-time hints. */
+export type SubmitTrackContext = {
+  elapsedSec: number;
+  sourceUrlCount: number;
+  indexedClaims?: number;
+};
+
+/** Active-step line under the vertical stepper on the submit page. */
+export function submitActiveStageMessage(
+  processingStatus: string | null | undefined,
+  ctx: SubmitTrackContext,
+): string {
+  const n = ctx.indexedClaims;
+  const archive =
+    n != null && n > 0
+      ? `Searching ${n} indexed claim${n === 1 ? "" : "s"} in the archive…`
+      : "Searching the embedding archive…";
+
+  switch (processingStatus) {
+    case "submitted":
+      return "Queued — your claim is already live on the site.";
+    case "embedding":
+      return `Indexing wording. ${archive}`;
+    case "duplicate_check":
+      return "Checking for near-duplicate claims in the corpus…";
+    case "canonicalizing":
+      return "Turning your text into a clear, testable canonical claim…";
+    case "enriching":
+      if (ctx.sourceUrlCount > 0) {
+        return `Reading ${ctx.sourceUrlCount} linked source${ctx.sourceUrlCount === 1 ? "" : "s"}, ${archive.toLowerCase()} Running AI verdict pass (often 20–40s).`;
+      }
+      return `${archive} Running AI confidence and provisional verdict (often 20–40s).`;
+    case "awaiting_moderation":
+      return "Research complete — provisional verdict is on your live claim page (unverified until moderated).";
+    case "completed":
+      return "Moderator review complete.";
+    case "failed":
+      return "Pipeline interrupted — you can still open the live claim or ask a moderator to re-run enrichment.";
+    case "revision_requested":
+      return "A moderator requested changes before research continues.";
+    case "rejected":
+      return "This submission was withdrawn from the public queue.";
+    default:
+      return "Connecting to the research pipeline…";
+  }
+}
+
+export type SubmitOutcome = { id: string; text: string };
+
+/** Concrete outcomes to show as checkmarks while polling the live claim. */
+export function buildSubmitOutcomes(
+  detail: ClaimDetail | null,
+  extras: {
+    duplicateCount?: number;
+    canonicalCandidate?: string | null;
+    errorMessage?: string | null;
+  },
+): SubmitOutcome[] {
+  const out: SubmitOutcome[] = [];
+  if (!detail && !extras.errorMessage) return out;
+
+  if (detail?.public_slug) {
+    out.push({ id: "live", text: "Live claim page created — visible on Browse." });
+  }
+  const canonical = detail?.canonical_claim_text?.trim() || extras.canonicalCandidate?.trim();
+  if (canonical) {
+    const short = canonical.length > 140 ? `${canonical.slice(0, 137)}…` : canonical;
+    out.push({ id: "canonical", text: `Canonical claim: “${short}”` });
+  }
+  const dup = extras.duplicateCount ?? detail?.related_slugs?.length ?? 0;
+  if (dup > 0) {
+    out.push({
+      id: "duplicates",
+      text: `${dup} similar claim${dup === 1 ? "" : "s"} flagged for review.`,
+    });
+  } else if (detail?.processing_status && ["duplicate_check", "canonicalizing", "enriching", "awaiting_moderation", "completed"].includes(detail.processing_status)) {
+    out.push({ id: "duplicates-none", text: "No close duplicates found in the archive." });
+  }
+  if (detail?.evidence_count && detail.evidence_count > 0) {
+    out.push({
+      id: "evidence",
+      text: `${detail.evidence_count} evidence item${detail.evidence_count === 1 ? "" : "s"} on record.`,
+    });
+  }
+  const summary = detail?.live_ai_summary?.trim();
+  if (summary) {
+    const short = summary.length > 160 ? `${summary.slice(0, 157)}…` : summary;
+    out.push({ id: "summary", text: `Research summary: ${short}` });
+  }
+  if (detail?.truth_label && detail.truth_label !== "unclear") {
+    out.push({
+      id: "truth",
+      text: `Provisional assessment: ${detail.truth_label} (AI, unverified).`,
+    });
+  } else if (detail?.processing_status === "awaiting_moderation") {
+    out.push({ id: "truth-unclear", text: "Provisional assessment: inconclusive (AI, unverified)." });
+  }
+  if (extras.errorMessage?.trim()) {
+    out.push({ id: "error", text: extras.errorMessage.trim() });
+  }
+  return out;
+}
+
+/** Submit-form status line with elapsed-time hints (initial POST only). */
 export function submitStatusMessage(elapsedSec: number, stepIndex: number): string {
   if (elapsedSec >= 20) {
     return "Almost there — finishing setup on the server…";
@@ -141,8 +296,11 @@ export function submitStatusMessage(elapsedSec: number, stepIndex: number): stri
 }
 
 /** Extra hint on claim page when polling takes longer than expected. */
-export function claimPollingHint(elapsedSec: number, processingStatus: string | null | undefined): string | null {
-  if (!processingStatus || processingStatus === "awaiting_moderation" || processingStatus === "completed") {
+export function claimPollingHint(
+  elapsedSec: number,
+  processingStatus: string | null | undefined,
+): string | null {
+  if (!processingStatus || PIPELINE_TERMINAL.has(processingStatus)) {
     return null;
   }
   if (elapsedSec >= 45) {
@@ -152,4 +310,8 @@ export function claimPollingHint(elapsedSec: number, processingStatus: string | 
     return "Still running — gathering evidence and running the decision model.";
   }
   return null;
+}
+
+export function isPipelineInFlight(processingStatus: string | null | undefined): boolean {
+  return Boolean(processingStatus && !PIPELINE_TERMINAL.has(processingStatus));
 }

@@ -9,7 +9,11 @@ import pytest
 from app.repositories.claims_repository import ClaimRepository
 from app.schemas.claims import AIAnalysisResponse
 from app.services.claims.ai_analyses_display import dedupe_public_ai_analyses
-from app.services.claims.claim_assessment import scores_from_pending_analyses, truth_label_from_analyses
+from app.services.claims.claim_assessment import (
+    assessment_confidence_score,
+    scores_from_pending_analyses,
+    truth_label_from_analyses,
+)
 from app.services.claims.live_summary import is_stale_live_summary, resolve_live_ai_summary
 from app.workers.tasks.enrichment_tasks import (
     _provisional_verdict_from_scores,
@@ -17,6 +21,31 @@ from app.workers.tasks.enrichment_tasks import (
 )
 from datetime import UTC, datetime
 from uuid import uuid4
+
+
+def test_assessment_confidence_boosts_hedged_refuted_verdict() -> None:
+    score = assessment_confidence_score(
+        {"aggregate": 0.5, "truth_label": "refuted", "evidence_quality": 0.2},
+    )
+    assert score == 0.82
+
+
+def test_scores_from_pending_boosts_hedged_aggregate() -> None:
+    class Row:
+        def __init__(self, analysis_type: str, payload: dict) -> None:
+            self.analysis_type = analysis_type
+            self.structured_payload = payload
+
+    analyses = [
+        Row(
+            "confidence_analysis",
+            {"aggregate": 0.5, "truth_label": "refuted", "evidence_quality": 0.2},
+        ),
+        Row("structured_verdict", {"verdict": {"verdict_summary": "Refuted."}}),
+    ]
+    confidence, _, evidence = scores_from_pending_analyses(analyses)
+    assert confidence == 0.82
+    assert evidence == 0.2
 
 
 def test_scores_from_pending_maps_evidence_quality_and_controversy() -> None:
@@ -41,7 +70,7 @@ def test_scores_from_pending_maps_evidence_quality_and_controversy() -> None:
         ),
     ]
     confidence, controversy, evidence = scores_from_pending_analyses(analyses)
-    assert confidence == 0.82
+    assert confidence == 0.9
     assert evidence == 0.55
     assert controversy == 0.12
 
