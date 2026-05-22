@@ -79,11 +79,8 @@ def truth_label_from_analyses(
             if raw in _TRUTH_VALUES:
                 label = raw
 
-    if label in _TRUTH_VALUES and label != "unclear":
+    if label in _TRUTH_VALUES:
         return label  # type: ignore[return-value]
-
-    if label == "unclear":
-        return "unclear"
 
     # Fallback when model omits truth_label (older rows).
     if aggregate >= 0.62:

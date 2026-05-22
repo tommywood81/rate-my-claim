@@ -138,3 +138,28 @@ export type CursorMeta = {
   has_more?: boolean;
   sort?: string;
 };
+
+export type ClaimAtlasPoint = {
+  id: string;
+  public_slug: string;
+  label: string;
+  status: string;
+  confidence_score: number;
+  controversy_score: number;
+  evidence_score: number;
+  freshness_score: number;
+  evidence_count: number;
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type ClaimAtlasData = {
+  points: ClaimAtlasPoint[];
+  method: string;
+  embedding_dimensions: number;
+  total_indexed: number;
+  projected_count: number;
+  computed_at: string;
+  note: string;
+};

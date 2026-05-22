@@ -34,19 +34,35 @@ _TERMINAL = frozenset(
     }
 )
 
+# Shown to the model when vector retrieval returns no archived evidence lines.
+_EMPTY_DIGEST_PROMPT = (
+    "ARCHIVE EVIDENCE: no matching sources were retrieved from this database.\n"
+    "Assess the claim using well-established public knowledge (markets, science, units, etc.). "
+    "Do not invent URLs or studies. Set evidence_quality between 0.1 and 0.35 to reflect "
+    "the empty archive, but still choose a definite truth_label when the facts are widely known."
+)
+
 
 def _provisional_verdict_from_scores(scores: dict[str, Any]) -> dict[str, Any]:
     """Structured verdict when no corpus evidence lines were retrieved."""
     aggregate = float(scores.get("aggregate", 0.5) or 0.5)
+    rationale = str(scores.get("rationale", "")).strip()
+    truth = str(scores.get("truth_label", "")).strip().lower()
+    controversy = float(scores.get("controversy_hint", 0.0) or 0.0)
+
+    if rationale and truth in {"supported", "refuted"}:
+        summary = rationale
+    else:
+        summary = (
+            f"Assessment (confidence {aggregate:.0%}): no archived sources matched, "
+            "but general knowledge may still apply. See the research summary."
+        )
+
     return {
-        "verdict_summary": (
-            f"Provisional verdict (confidence {aggregate:.0%}): no matching evidence "
-            "was retrieved from the archive. See the research summary and confidence "
-            "analysis for the full rationale."
-        ),
+        "verdict_summary": summary,
         "citations": [],
         "confidence_hint": aggregate,
-        "controversy_hint": 0.0,
+        "controversy_hint": controversy,
     }
 
 
@@ -181,7 +197,7 @@ async def _run_pipeline(pending_id: UUID) -> None:
 
             has_corpus_evidence = bool(lines)
             context = "\n".join(lines) if lines else "(no corpus evidence retrieved)"
-            digest = "\n".join(lines[:20]) if lines else "(no corpus evidence retrieved)"
+            digest = "\n".join(lines[:20]) if lines else _EMPTY_DIGEST_PROMPT
 
             scores = await provider.generate_confidence_analysis(canonical, digest)
             await ai_repo.add_analysis(

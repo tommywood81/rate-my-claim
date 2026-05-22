@@ -164,6 +164,13 @@ class Settings(BaseSettings):
             "during pending enrichment. Prevents unrelated nearest-neighbor bleed."
         ),
     )
+    atlas_max_claims: int = Field(
+        default=600,
+        ge=10,
+        le=800,
+        alias="ATLAS_MAX_CLAIMS",
+        description="Max claims to project in the public embedding atlas API.",
+    )
     hybrid_semantic_weight: float = 0.35
     hybrid_fts_weight: float = 0.25
     hybrid_evidence_weight: float = 0.15

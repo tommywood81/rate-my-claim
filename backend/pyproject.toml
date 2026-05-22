@@ -34,6 +34,7 @@ dependencies = [
     "python-multipart>=0.0.17",
     "email-validator>=2.2.0",
     "python-slugify>=8.0.0",
+    "numpy>=2.0.0",
     "feedparser>=6.0.0",
     "opentelemetry-api>=1.29.0",
     "opentelemetry-sdk>=1.29.0",

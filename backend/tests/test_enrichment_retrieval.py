@@ -113,6 +113,21 @@ def test_resolve_live_summary_replaces_stale_rejection_hint() -> None:
     assert "rejection hint" not in out.lower()
 
 
+def test_provisional_verdict_uses_rationale_when_truth_known() -> None:
+    scores = {
+        "aggregate": 0.88,
+        "truth_label": "refuted",
+        "controversy_hint": 0.05,
+        "rationale": (
+            "Platinum typically trades at a higher price per ounce than silver; "
+            "the claim reverses the usual market ordering."
+        ),
+    }
+    verdict = _provisional_verdict_from_scores(scores)
+    assert "Platinum" in verdict["verdict_summary"]
+    assert verdict["controversy_hint"] == 0.05
+
+
 def test_provisional_summary_uses_confidence_rationale() -> None:
     scores = {
         "aggregate": 0.9,
@@ -120,7 +135,7 @@ def test_provisional_summary_uses_confidence_rationale() -> None:
     }
     assert "Gold is denser" in _research_summary_from_scores(scores, has_corpus_evidence=False)
     verdict = _provisional_verdict_from_scores(scores)
-    assert "Provisional verdict" in verdict["verdict_summary"]
+    assert "no archived sources matched" in verdict["verdict_summary"]
     assert verdict["confidence_hint"] == 0.9
     assert verdict["citations"] == []
 

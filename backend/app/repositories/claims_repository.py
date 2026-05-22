@@ -52,6 +52,24 @@ class ClaimRepository(RepositoryBase):
         result = await self._session.execute(stmt)
         return result.scalars().all()
 
+    async def list_claims_with_embeddings(self, *, limit: int) -> Sequence[Claim]:
+        """Claims that have vector embeddings, for atlas projection."""
+        stmt = (
+            select(Claim)
+            .where(Claim.deleted_at.is_(None), Claim.embedding.is_not(None))
+            .order_by(Claim.updated_at.desc(), Claim.id.desc())
+            .limit(limit)
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def count_claims_with_embeddings(self) -> int:
+        """Total indexed claims with embeddings (may exceed atlas display cap)."""
+        stmt = select(func.count()).select_from(Claim).where(
+            Claim.deleted_at.is_(None),
+            Claim.embedding.is_not(None),
+        )
+        return int((await self._session.execute(stmt)).scalar_one())
+
     async def vector_similar_claims(
         self, embedding: list[float], *, limit: int, exclude_id: UUID | None = None
     ) -> Sequence[tuple[Claim, float]]:

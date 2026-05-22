@@ -25,6 +25,9 @@ export function SiteHeader() {
           <a href="/search" className={navLink}>
             Search
           </a>
+          <a href="/atlas" className={navLink}>
+            Data model
+          </a>
           <a href="/submit" className={navLink}>
             Submit
           </a>

@@ -106,6 +106,7 @@ class OllamaProvider(BaseAIProvider):
         out = await self._chat(
             f"JSON aggregate evidence_quality source_credibility evidence_consistency freshness "
             f"controversy_hint truth_label supported|refuted|unclear rationale. "
+            f"If digest says no archive evidence, use public knowledge; do not default aggregate 0.5. "
             f"Claim:{claim} Digest:{evidence_digest[:8000]}",
             "generate_confidence_analysis",
         )
