@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { logoutSession } from "@/lib/api";
+
 type Me = { id: string; username: string; role: string };
 
 export function SiteAuthNav() {
@@ -32,8 +34,13 @@ export function SiteAuthNav() {
   }, []);
 
   async function logout() {
-    await fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" });
+    try {
+      await logoutSession();
+    } catch {
+      /* still clear local UI; server may already be logged out */
+    }
     setMe(null);
+    router.replace("/");
     router.refresh();
   }
 

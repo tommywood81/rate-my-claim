@@ -52,8 +52,14 @@ export default function ModerationPage() {
         const msg = e instanceof Error ? e.message : "Failed to load queue";
         setErr(msg);
         const lower = msg.toLowerCase();
-        if (lower.includes("forbidden") || lower === "403") {
+        if (
+          lower.includes("forbidden") ||
+          lower.includes("403") ||
+          lower.includes("not_authenticated") ||
+          lower.includes("401")
+        ) {
           setLoadState("forbidden");
+          setRows([]);
         } else {
           setLoadState("error");
         }
@@ -192,7 +198,8 @@ export default function ModerationPage() {
         {loadState === "authorized" && rows.length === 0 && (
           <li className="px-4 py-6 text-sm text-[var(--muted)]">No active submissions in the pipeline.</li>
         )}
-        {rows.map((p) => (
+        {loadState === "authorized" &&
+          rows.map((p) => (
           <li key={p.id} className="space-y-2 px-4 py-3">
             <p className="text-xs text-[var(--muted)]">
               {p.id} · <span className="font-medium text-[var(--fg)]">{p.processing_status}</span> ·{" "}

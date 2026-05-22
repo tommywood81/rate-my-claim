@@ -38,3 +38,11 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
   return rec.data as T;
 }
+
+/** End cookie session: ensure CSRF cookie exists, then revoke refresh + clear auth cookies. */
+export async function logoutSession(): Promise<void> {
+  if (!getCsrfToken()) {
+    await fetch(`${API_BASE}/api/v1/csrf`, { credentials: "include" });
+  }
+  await apiFetch<Record<string, never>>("/api/v1/auth/logout", { method: "POST" });
+}
