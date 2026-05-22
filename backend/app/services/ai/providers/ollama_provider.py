@@ -104,7 +104,8 @@ class OllamaProvider(BaseAIProvider):
     async def generate_confidence_analysis(self, claim: str, evidence_digest: str) -> dict[str, Any]:
         """Scores JSON."""
         out = await self._chat(
-            f"JSON aggregate evidence_quality source_credibility evidence_consistency freshness rationale. "
+            f"JSON aggregate evidence_quality source_credibility evidence_consistency freshness "
+            f"controversy_hint truth_label supported|refuted|unclear rationale. "
             f"Claim:{claim} Digest:{evidence_digest[:8000]}",
             "generate_confidence_analysis",
         )

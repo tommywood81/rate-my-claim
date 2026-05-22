@@ -7,6 +7,7 @@ import { AiAnalysisList } from "@/components/ai-analysis-list";
 import { ClaimPipelineStepper } from "@/components/claim-pipeline-stepper";
 import { ClaimTimeline } from "@/components/claim-timeline";
 import { EvidenceList } from "@/components/evidence-list";
+import { ClaimTruthBanner } from "@/components/claim-truth-banner";
 import { ResearchPipelineProgress } from "@/components/research-pipeline-progress";
 import { apiFetch } from "@/lib/api";
 import { claimPollingHint } from "@/lib/research-pipeline-ux";
@@ -161,6 +162,10 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
           <p className="text-xs text-[var(--muted)]">Also known as: {detail.aliases.join(", ")}</p>
         )}
       </header>
+
+      {detail.truth_label && (
+        <ClaimTruthBanner label={detail.truth_label} />
+      )}
 
       {showSubmittedBanner && (
         <p className="owid-card border-l-4 border-l-[var(--accent)] px-4 py-3 text-sm text-[var(--fg)]">

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from app.models.claim import Claim, PendingClaim, ProcessingStatus
 from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.schemas.claims import AIAnalysisResponse
+from app.services.claims.claim_assessment import truth_label_from_analyses
 from app.services.claims.live_summary import resolve_live_ai_summary
 from app.services.claims.pipeline_labels import (
     pipeline_stage_key,
@@ -26,6 +27,7 @@ class ClaimLiveContext:
     visibility_label: str
     moderation_reviewed: bool
     pending_ai_analyses: list[AIAnalysisResponse]
+    truth_label: str | None
 
 
 def _moderation_reviewed(pending: PendingClaim | None, claim: Claim) -> bool:
@@ -79,6 +81,7 @@ async def build_claim_live_context(
             analyses=pending_analyses,
             canonical_claim_text=claim.canonical_claim_text,
         )
+        truth_label = truth_label_from_analyses(pending_analyses, processing_status=proc)
 
     return ClaimLiveContext(
         processing_status=proc,
@@ -88,6 +91,7 @@ async def build_claim_live_context(
         visibility_label=vis,
         moderation_reviewed=reviewed,
         pending_ai_analyses=pending_analyses,
+        truth_label=truth_label,
     )
 
 

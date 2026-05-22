@@ -221,9 +221,12 @@ class OpenAIProvider(BaseAIProvider):
     ) -> dict[str, Any]:
         """Return component scores in [0,1]."""
         system = (
-            "Score evidence support strength (not absolute truth). "
-            "JSON keys: aggregate (0-1), evidence_quality, source_credibility, "
-            "evidence_consistency, freshness, rationale (string)."
+            "Score how well available evidence supports the claim. "
+            "JSON keys: aggregate (0-1), evidence_quality (0-1), source_credibility (0-1), "
+            "evidence_consistency (0-1), freshness (0-1), controversy_hint (0-1, how debated), "
+            'truth_label ("supported"|"refuted"|"unclear"), rationale (string). '
+            "truth_label: supported if claim is well-founded, refuted if clearly false, "
+            "unclear if insufficient evidence."
         )
         model = model_for_operation(self._settings, "generate_confidence_analysis")
         return await self._chat_json(

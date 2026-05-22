@@ -286,6 +286,7 @@ async def claim_detail(
         live_ai_summary=live.live_ai_summary,
         visibility_label=live.visibility_label,
         moderation_reviewed=live.moderation_reviewed,
+        truth_label=live.truth_label,
     )
     return SuccessEnvelope(data=detail)
 

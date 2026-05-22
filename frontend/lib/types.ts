@@ -67,6 +67,7 @@ export type ClaimDetail = {
   live_ai_summary?: string | null;
   visibility_label?: string | null;
   moderation_reviewed?: boolean;
+  truth_label?: "supported" | "refuted" | "unclear" | null;
 };
 
 export type UserProfile = {

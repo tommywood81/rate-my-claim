@@ -9,6 +9,7 @@ import pytest
 from app.repositories.claims_repository import ClaimRepository
 from app.schemas.claims import AIAnalysisResponse
 from app.services.claims.ai_analyses_display import dedupe_public_ai_analyses
+from app.services.claims.claim_assessment import scores_from_pending_analyses, truth_label_from_analyses
 from app.services.claims.live_summary import is_stale_live_summary, resolve_live_ai_summary
 from app.workers.tasks.enrichment_tasks import (
     _provisional_verdict_from_scores,
@@ -16,6 +17,46 @@ from app.workers.tasks.enrichment_tasks import (
 )
 from datetime import UTC, datetime
 from uuid import uuid4
+
+
+def test_scores_from_pending_maps_evidence_quality_and_controversy() -> None:
+    class Row:
+        def __init__(self, analysis_type: str, payload: dict) -> None:
+            self.analysis_type = analysis_type
+            self.structured_payload = payload
+
+    analyses = [
+        Row(
+            "confidence_analysis",
+            {
+                "aggregate": 0.82,
+                "evidence_quality": 0.55,
+                "controversy_hint": 0.12,
+                "truth_label": "supported",
+            },
+        ),
+        Row(
+            "structured_verdict",
+            {"verdict": {"controversy_hint": 0.05, "confidence_hint": 0.8}},
+        ),
+    ]
+    confidence, controversy, evidence = scores_from_pending_analyses(analyses)
+    assert confidence == 0.82
+    assert evidence == 0.55
+    assert controversy == 0.12
+
+
+def test_truth_label_supported_after_verdict() -> None:
+    class Row:
+        def __init__(self, analysis_type: str, payload: dict) -> None:
+            self.analysis_type = analysis_type
+            self.structured_payload = payload
+
+    analyses = [
+        Row("confidence_analysis", {"aggregate": 0.9, "truth_label": "supported"}),
+        Row("structured_verdict", {"verdict": {"verdict_summary": "Supported."}}),
+    ]
+    assert truth_label_from_analyses(analyses, processing_status="awaiting_moderation") == "supported"
 
 
 def test_dedupe_public_ai_analyses_hides_duplicate_confidence_text() -> None:
@@ -79,7 +120,8 @@ def test_provisional_summary_uses_confidence_rationale() -> None:
     }
     assert "Gold is denser" in _research_summary_from_scores(scores, has_corpus_evidence=False)
     verdict = _provisional_verdict_from_scores(scores)
-    assert verdict["verdict_summary"] == scores["rationale"]
+    assert "Provisional verdict" in verdict["verdict_summary"]
+    assert verdict["confidence_hint"] == 0.9
     assert verdict["citations"] == []
 
 

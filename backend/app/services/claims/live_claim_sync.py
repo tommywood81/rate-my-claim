@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -12,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.claim import Claim, ClaimStatus, PendingClaim, ProcessingStatus
 from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.repositories.claims_repository import ClaimRepository
+from app.services.claims.claim_assessment import scores_from_pending_analyses
 from app.utils.slug import public_slug_for_claim
 
 logger = logging.getLogger(__name__)
@@ -62,34 +62,6 @@ async def ensure_live_claim_for_pending(session: AsyncSession, pending: PendingC
     return claim
 
 
-def _scores_from_pending_analyses(analyses: list) -> tuple[float, float]:
-    confidence = 0.0
-    controversy = 0.0
-    for row in analyses:
-        if row.analysis_type == "confidence_analysis" and row.structured_payload:
-            try:
-                data = (
-                    json.loads(row.structured_payload)
-                    if isinstance(row.structured_payload, str)
-                    else row.structured_payload
-                )
-                confidence = float(data.get("aggregate", 0.0) or 0.0)
-            except (json.JSONDecodeError, TypeError, ValueError):
-                continue
-        if row.analysis_type == "structured_verdict" and row.structured_payload:
-            try:
-                bundle = (
-                    json.loads(row.structured_payload)
-                    if isinstance(row.structured_payload, str)
-                    else row.structured_payload
-                )
-                verdict = bundle.get("verdict", {}) or {}
-                controversy = float(verdict.get("controversy_hint", 0.0) or 0.0)
-            except (json.JSONDecodeError, TypeError, ValueError):
-                continue
-    return confidence, controversy
-
-
 async def sync_pending_to_linked_claim(session: AsyncSession, pending_id: UUID) -> None:
     """Push pending enrichment fields onto the linked public claim."""
     repo = ClaimRepository(session)
@@ -117,10 +89,11 @@ async def sync_pending_to_linked_claim(session: AsyncSession, pending_id: UUID) 
 
     ai_repo = AIAnalysisRepository(session)
     analyses = await ai_repo.list_for_target("pending_claim", pending.id)
-    confidence, controversy = _scores_from_pending_analyses(analyses)
-    if confidence > 0 or controversy > 0:
+    confidence, controversy, evidence_score = scores_from_pending_analyses(analyses)
+    if analyses:
         claim.confidence_score = confidence
         claim.controversy_score = controversy
+        claim.evidence_score = evidence_score
 
     proc = _coerce_processing_status(pending.processing_status)
     if proc == ProcessingStatus.awaiting_moderation and analyses:

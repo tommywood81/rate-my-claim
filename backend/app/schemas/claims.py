@@ -117,6 +117,7 @@ class ClaimDetailResponse(BaseModel):
     live_ai_summary: str | None = None
     visibility_label: str | None = None
     moderation_reviewed: bool = False
+    truth_label: str | None = None
 
     model_config = {"from_attributes": True}
 
