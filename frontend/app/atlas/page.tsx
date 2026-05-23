@@ -16,7 +16,7 @@ export default function AtlasPage() {
       <p className="owid-lead mt-3">
         Each point is a published claim positioned by a 3D PCA projection of its stored embedding vector. Clusters
         emerge as the corpus grows — similar wording and topics drift together even before moderators attach
-        citations.
+        citations. Use fullscreen for a lab-style view; the map auto-rotates after a few seconds when idle.
       </p>
       <div className="mt-8">
         <ClaimAtlasView />

@@ -3,8 +3,20 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { scoreToRgb, type AtlasColorMode } from "@/lib/claim-atlas-colors";
+import type { AtlasColorMode } from "@/lib/claim-atlas-colors";
+import {
+  ATLAS_STORAGE_THEME,
+  getAtlasPalette,
+  paintAtlasBackdrop,
+  paintAtlasPoint,
+  scoreToThemeRgb,
+  type AtlasVisualTheme,
+} from "@/lib/claim-atlas-theme";
 import type { ClaimAtlasData, ClaimAtlasPoint } from "@/lib/types";
+
+const IDLE_MS = 5000;
+const AUTO_ROTATE_Y = 0.0022;
+const AUTO_ROTATE_X = 0.0006;
 
 type Vec3 = { x: number; y: number; z: number };
 type ScreenPoint = { sx: number; sy: number; depth: number; radius: number };
@@ -28,7 +40,7 @@ function projectPoint(p: Vec3, width: number, height: number, zoom: number): Scr
     sx: width / 2 + p.x * scale,
     sy: height / 2 - p.y * scale,
     depth: p.z,
-    radius: Math.max(3, 5 + scale * 0.02),
+    radius: Math.max(3.5, 5.5 + scale * 0.022),
   };
 }
 
@@ -38,23 +50,61 @@ function scoreForMode(point: ClaimAtlasPoint, mode: AtlasColorMode): number {
   return point.confidence_score;
 }
 
+function readStoredTheme(): AtlasVisualTheme {
+  if (typeof window === "undefined") return "dark";
+  try {
+    const v = localStorage.getItem(ATLAS_STORAGE_THEME);
+    return v === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
 export function ClaimAtlasView() {
+  const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<ClaimAtlasData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [colorMode, setColorMode] = useState<AtlasColorMode>("confidence");
+  const [visualTheme, setVisualTheme] = useState<AtlasVisualTheme>("dark");
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [hovered, setHovered] = useState<ClaimAtlasPoint | null>(null);
   const [selected, setSelected] = useState<ClaimAtlasPoint | null>(null);
+  const [reduceMotion, setReduceMotion] = useState(false);
   const rotRef = useRef({ x: -0.35, y: 0.55 });
   const zoomRef = useRef(1);
+  const lastInteractRef = useRef(Date.now());
   const dragRef = useRef<{ active: boolean; lastX: number; lastY: number }>({
     active: false,
     lastX: 0,
     lastY: 0,
   });
   const drawRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    setVisualTheme(readStoredTheme());
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduceMotion(mq.matches);
+    const onChange = () => setReduceMotion(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  const markInteract = useCallback(() => {
+    lastInteractRef.current = Date.now();
+  }, []);
+
+  const setTheme = useCallback((theme: AtlasVisualTheme) => {
+    setVisualTheme(theme);
+    try {
+      localStorage.setItem(ATLAS_STORAGE_THEME, theme);
+    } catch {
+      /* private mode */
+    }
+    markInteract();
+  }, [markInteract]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,7 +131,7 @@ export function ClaimAtlasView() {
     if (!canvas || !container || !data) return;
 
     const rect = container.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     const w = Math.max(320, Math.floor(rect.width));
     const h = Math.max(360, Math.floor(rect.height));
     canvas.width = w * dpr;
@@ -94,20 +144,9 @@ export function ClaimAtlasView() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    const gradient = ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, "#f8f8f6");
-    gradient.addColorStop(1, "#eef3f6");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, w, h);
-
-    ctx.strokeStyle = "rgba(0, 32, 78, 0.08)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(w / 2, 24);
-    ctx.lineTo(w / 2, h - 24);
-    ctx.moveTo(24, h / 2);
-    ctx.lineTo(w - 24, h / 2);
-    ctx.stroke();
+    const palette = getAtlasPalette(visualTheme);
+    const isDark = visualTheme === "dark";
+    paintAtlasBackdrop(ctx, w, h, palette, visualTheme);
 
     const projected: { point: ClaimAtlasPoint; screen: ScreenPoint }[] = [];
     for (const point of data.points) {
@@ -119,23 +158,17 @@ export function ClaimAtlasView() {
     projected.sort((a, b) => a.screen.depth - b.screen.depth);
 
     for (const { point, screen } of projected) {
-      const color = scoreToRgb(colorMode, scoreForMode(point, colorMode));
+      const color = scoreToThemeRgb(colorMode, scoreForMode(point, colorMode), visualTheme);
       const isHover = hovered?.id === point.id;
       const isSelected = selected?.id === point.id;
-      const r = screen.radius * (isHover || isSelected ? 1.45 : 1);
-      ctx.beginPath();
-      ctx.fillStyle = color;
-      ctx.globalAlpha = isHover || isSelected ? 1 : 0.82;
-      ctx.arc(screen.sx, screen.sy, r, 0, Math.PI * 2);
-      ctx.fill();
-      if (isSelected) {
-        ctx.strokeStyle = "#00204e";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
+      const r = screen.radius * (isHover || isSelected ? 1.4 : 1);
+      paintAtlasPoint(ctx, screen.sx, screen.sy, r, color, palette, {
+        hover: isHover,
+        selected: isSelected,
+        dark: isDark,
+      });
     }
-    ctx.globalAlpha = 1;
-  }, [colorMode, data, hovered, selected]);
+  }, [colorMode, data, hovered, selected, visualTheme]);
 
   drawRef.current = draw;
 
@@ -155,12 +188,50 @@ export function ClaimAtlasView() {
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      markInteract();
       zoomRef.current = Math.max(0.4, Math.min(2.5, zoomRef.current - e.deltaY * 0.001));
       drawRef.current();
     };
     container.addEventListener("wheel", onWheel, { passive: false });
     return () => container.removeEventListener("wheel", onWheel);
+  }, [markInteract]);
+
+  useEffect(() => {
+    if (reduceMotion || !data?.points.length) return;
+    let raf = 0;
+    const tick = () => {
+      const idle = Date.now() - lastInteractRef.current >= IDLE_MS;
+      if (idle && !dragRef.current.active) {
+        rotRef.current.y += AUTO_ROTATE_Y;
+        rotRef.current.x += AUTO_ROTATE_X;
+        drawRef.current();
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [data, reduceMotion]);
+
+  useEffect(() => {
+    const onFs = () => setIsFullscreen(document.fullscreenElement === rootRef.current);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    const el = rootRef.current;
+    if (!el) return;
+    markInteract();
+    try {
+      if (document.fullscreenElement === el) {
+        await document.exitFullscreen();
+      } else {
+        await el.requestFullscreen();
+      }
+    } catch {
+      /* unsupported */
+    }
+  }, [markInteract]);
 
   const pickPoint = useCallback(
     (clientX: number, clientY: number) => {
@@ -191,6 +262,7 @@ export function ClaimAtlasView() {
   );
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    markInteract();
     const hit = pickPoint(e.clientX, e.clientY);
     if (hit) {
       setSelected(hit);
@@ -203,6 +275,7 @@ export function ClaimAtlasView() {
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (dragRef.current.active) {
+      markInteract();
       const dx = e.clientX - dragRef.current.lastX;
       const dy = e.clientY - dragRef.current.lastY;
       dragRef.current.lastX = e.clientX;
@@ -217,6 +290,7 @@ export function ClaimAtlasView() {
 
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     dragRef.current.active = false;
+    markInteract();
     try {
       (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId);
     } catch {
@@ -228,22 +302,75 @@ export function ClaimAtlasView() {
     ? `${data.projected_count} shown · ${data.total_indexed} indexed · ${data.embedding_dimensions}D → 3D (${data.method})`
     : "";
 
+  const palette = getAtlasPalette(visualTheme);
+  const isDark = visualTheme === "dark";
+  const focus = selected ?? hovered;
+  const toolBtn =
+    "rounded border border-sky-500/35 bg-[rgba(8,18,36,0.88)] px-3 py-1.5 text-sm text-slate-200 hover:border-sky-300/60 hover:bg-[rgba(12,28,52,0.95)] disabled:opacity-50";
+  const toolBtnActive =
+    "rounded border border-sky-300/75 bg-sky-900/50 px-3 py-1.5 text-sm text-slate-100";
+
   return (
-    <div className="space-y-4">
+    <div
+      ref={rootRef}
+      className={
+        isFullscreen
+          ? "fixed inset-0 z-50 flex flex-col overflow-auto p-4 sm:p-6"
+          : "space-y-4"
+      }
+      style={
+        isFullscreen
+          ? { background: isDark ? "#040810" : "#f8f8f6", color: isDark ? "#e2e8f0" : undefined }
+          : undefined
+      }
+    >
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <p className="text-sm text-[var(--muted)] max-w-2xl">{data?.note}</p>
+        <p
+          className="text-sm max-w-2xl"
+          style={{ color: isFullscreen && isDark ? palette.panelMuted : undefined }}
+        >
+          <span className={isFullscreen ? "" : "text-[var(--muted)]"}>{data?.note}</span>
+        </p>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-[var(--muted)]" role="status">
-            {loading ? "Loading atlas…" : stats}
+          <span
+            className="text-xs"
+            role="status"
+            style={{ color: isFullscreen && isDark ? palette.panelMuted : undefined }}
+          >
+            <span className={isFullscreen ? "" : "text-[var(--muted)]"}>
+              {loading ? "Loading atlas…" : stats}
+            </span>
           </span>
-          <button type="button" className="owid-btn-secondary text-sm" onClick={() => void load()} disabled={loading}>
+          <button
+            type="button"
+            className={isDark ? toolBtn : "owid-btn-secondary text-sm"}
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            aria-pressed={isDark}
+            title={isDark ? "Switch to light background" : "Switch to dark lab view"}
+          >
+            {isDark ? "Light mode" : "Dark mode"}
+          </button>
+          <button
+            type="button"
+            className={isDark ? toolBtn : "owid-btn-secondary text-sm"}
+            onClick={() => void toggleFullscreen()}
+            aria-pressed={isFullscreen}
+          >
+            {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          </button>
+          <button
+            type="button"
+            className={isDark ? toolBtn : "owid-btn-secondary text-sm"}
+            onClick={() => void load()}
+            disabled={loading}
+          >
             Refresh
           </button>
         </div>
       </div>
 
       {error && (
-        <p className="text-sm text-red-800" role="alert">
+        <p className="text-sm text-red-400" role="alert">
           {error}
         </p>
       )}
@@ -259,8 +386,19 @@ export function ClaimAtlasView() {
           <button
             key={key}
             type="button"
-            className={colorMode === key ? "owid-btn-primary text-sm" : "owid-btn-secondary text-sm"}
-            onClick={() => setColorMode(key)}
+            className={
+              colorMode === key
+                ? isDark
+                  ? toolBtnActive
+                  : "owid-btn-primary text-sm"
+                : isDark
+                  ? toolBtn
+                  : "owid-btn-secondary text-sm"
+            }
+            onClick={() => {
+              setColorMode(key);
+              markInteract();
+            }}
             aria-pressed={colorMode === key}
           >
             {label}
@@ -270,13 +408,21 @@ export function ClaimAtlasView() {
 
       <div
         ref={containerRef}
-        className="owid-card relative h-[min(70vh,520px)] min-h-[360px] w-full overflow-hidden bg-[var(--bg-subtle)]"
-        style={{ touchAction: "none" }}
+        className={
+          isFullscreen
+            ? "relative min-h-0 flex-1 w-full overflow-hidden rounded-lg border"
+            : "owid-card relative h-[min(70vh,520px)] min-h-[360px] w-full overflow-hidden"
+        }
+        style={{
+          touchAction: "none",
+          borderColor: isDark ? "rgba(56, 189, 248, 0.2)" : undefined,
+          background: isDark ? "#060d18" : undefined,
+        }}
       >
         <canvas
           ref={canvasRef}
           className="h-full w-full cursor-grab touch-none active:cursor-grabbing"
-          aria-label="Interactive 3D map of claim embeddings. Drag to rotate, scroll to zoom, click a point to select."
+          aria-label="Interactive 3D map of claim embeddings. Drag to rotate, scroll to zoom, click a point to select. Auto-rotates after five seconds idle."
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -286,26 +432,34 @@ export function ClaimAtlasView() {
           }}
         />
         {!loading && data && data.points.length === 0 && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-[var(--muted)]">
+          <div
+            className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 text-center text-sm"
+            style={{ color: palette.hint }}
+          >
             No claims with embeddings yet. Submit claims and wait for enrichment — points will appear here as the
             vector index grows.
           </div>
         )}
-        {(hovered || selected) && (
+        {focus && (
           <div className="pointer-events-none absolute bottom-3 left-3 right-3 sm:right-auto sm:max-w-md">
-            <div className="owid-card border-[var(--accent)] bg-white/95 p-3 text-sm shadow-sm">
-              <p className="font-medium text-[var(--accent-dark)]">
-                {(selected ?? hovered)?.label}
-              </p>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                Confidence {(selected ?? hovered)!.confidence_score.toFixed(2)} · Controversy{" "}
-                {(selected ?? hovered)!.controversy_score.toFixed(2)} · Evidence{" "}
-                {(selected ?? hovered)!.evidence_score.toFixed(2)}
+            <div
+              className="rounded-lg border p-3 text-sm shadow-lg backdrop-blur-sm"
+              style={{
+                background: palette.panelBg,
+                borderColor: palette.panelBorder,
+                color: palette.panelText,
+              }}
+            >
+              <p className="font-medium">{focus.label}</p>
+              <p className="mt-1 text-xs" style={{ color: palette.panelMuted }}>
+                Confidence {focus.confidence_score.toFixed(2)} · Controversy{" "}
+                {focus.controversy_score.toFixed(2)} · Evidence {focus.evidence_score.toFixed(2)}
               </p>
               {selected && (
                 <Link
                   href={`/claims/${selected.public_slug}`}
                   className="pointer-events-auto mt-2 inline-block text-sm font-medium"
+                  style={{ color: isDark ? "#7dd3fc" : "var(--accent-dark)" }}
                 >
                   Open claim →
                 </Link>
@@ -313,12 +467,22 @@ export function ClaimAtlasView() {
             </div>
           </div>
         )}
+        {isDark && !reduceMotion && (
+          <p
+            className="pointer-events-none absolute right-3 top-3 text-[10px] uppercase tracking-wider"
+            style={{ color: palette.panelMuted }}
+          >
+            Auto-rotate when idle
+          </p>
+        )}
       </div>
 
-      <p className="text-xs text-[var(--muted)]">
-        Drag to rotate · scroll to zoom · click a point to select and open. Nearby points share similar meaning in
-        embedding space, not necessarily the same verdict.
-      </p>
+      {!isFullscreen && (
+        <p className="text-xs text-[var(--muted)]">
+          Drag to rotate · scroll to zoom · click a point to select. After 5s without input the view slowly spins.
+          Nearby points share similar meaning in embedding space, not necessarily the same verdict.
+        </p>
+      )}
     </div>
   );
 }
