@@ -4,11 +4,18 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { formatLastAiRun } from "@/lib/claim-ai-moderation";
 
-export function ClaimAiAnalysisPanel({ slug }: { slug: string }) {
+type Props = {
+  slug: string;
+  lastAiRunAt?: string | null;
+};
+
+export function ClaimAiAnalysisPanel({ slug, lastAiRunAt }: Props) {
   const router = useRouter();
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const lastRun = formatLastAiRun(lastAiRunAt);
 
   async function onGenerate() {
     setErr(null);
@@ -28,8 +35,13 @@ export function ClaimAiAnalysisPanel({ slug }: { slug: string }) {
   return (
     <div className="mt-3 space-y-2 border-t border-dashed border-[var(--border)] pt-3">
       <p className="text-xs text-[var(--muted)]">
-        Moderators: generate a non-canonical structured verdict from evidence on this claim (calls your configured AI
-        provider). Sign in from this origin if the button returns an error.
+        Moderators: generate a structured verdict from evidence already on this claim (one live provider call).
+        {lastRun && (
+          <>
+            {" "}
+            Last AI run: <time dateTime={lastAiRunAt!}>{lastRun}</time>.
+          </>
+        )}
       </p>
       <button
         type="button"

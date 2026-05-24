@@ -14,6 +14,7 @@ from app.db.session import get_db
 from app.models.claim import ClaimStatus, PendingClaim, ProcessingStatus
 from app.schemas.claims import DuplicateHintResponse, ModerationActionRequest, PendingClaimResponse
 from app.schemas.common import CursorMeta, ErrorDetail, ErrorEnvelope, SuccessEnvelope
+from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.repositories.claims_repository import ClaimRepository
 from app.services.moderation.moderation_service import ModerationService
 from app.utils.cursor import ClaimCursor, decode_cursor, encode_cursor
@@ -118,7 +119,17 @@ async def moderation_queue(
     if has_more and rows:
         last = rows[-1]
         next_c = encode_cursor(ClaimCursor(created_at=last.created_at, claim_id=last.id))
-    data = [await _pending_with_slug(db, r) for r in rows]
+    ai_repo = AIAnalysisRepository(db)
+    last_ai_map = await ai_repo.latest_created_at_for_targets(
+        "pending_claim",
+        [row.id for row in rows],
+    )
+    data = [
+        (await _pending_with_slug(db, row)).model_copy(
+            update={"last_ai_run_at": last_ai_map.get(row.id)}
+        )
+        for row in rows
+    ]
     return SuccessEnvelope(
         data=data,
         meta=CursorMeta(next_cursor=next_c, previous_cursor=None, has_more=has_more).model_dump(),

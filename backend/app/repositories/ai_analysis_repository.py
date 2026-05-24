@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.models.ai_analysis import AIAnalysis
 from app.repositories.base import RepositoryBase
@@ -53,3 +53,22 @@ class AIAnalysisRepository(RepositoryBase):
             .order_by(AIAnalysis.created_at.desc())
         )
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def latest_created_at_for_targets(
+        self,
+        target_type: str,
+        target_ids: list[UUID],
+    ) -> dict[UUID, datetime]:
+        """Map each target id to its newest analysis timestamp."""
+        if not target_ids:
+            return {}
+        stmt = (
+            select(AIAnalysis.target_id, func.max(AIAnalysis.created_at))
+            .where(
+                AIAnalysis.target_type == target_type,
+                AIAnalysis.target_id.in_(target_ids),
+            )
+            .group_by(AIAnalysis.target_id)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {target_id: created_at for target_id, created_at in rows}

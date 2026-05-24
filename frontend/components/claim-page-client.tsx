@@ -15,6 +15,7 @@ import type { ClaimDetail, ClaimGraph, ClaimTimeline as ClaimTimelineData } from
 
 import { ClaimAiAnalysisPanel } from "@/app/claims/[slug]/claim-ai-panel";
 import { ClaimGraphSection } from "@/app/claims/[slug]/claim-graph-section";
+import { formatLastAiRun, generateAiBlockMessage } from "@/lib/claim-ai-moderation";
 
 const TERMINAL = new Set(["completed", "rejected", "failed"]);
 
@@ -134,6 +135,8 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
     detail.evidence_supporting.length +
     detail.evidence_contradicting.length +
     detail.evidence_contextual.length;
+
+  const aiBlockMessage = generateAiBlockMessage(detail.generate_ai_analysis_block_reason);
 
   return (
     <article className="space-y-10">
@@ -294,12 +297,22 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
           <h2 id="ai-panel-heading" className="owid-kicker">
             AI-assisted analysis
           </h2>
+          {detail.last_ai_run_at && (
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Last AI run:{" "}
+              <time dateTime={detail.last_ai_run_at}>{formatLastAiRun(detail.last_ai_run_at)}</time>
+            </p>
+          )}
         </header>
         <AiAnalysisList items={detail.ai_analyses} />
         {detail.ai_analyses.length === 0 && inActivePipeline && (
           <p className="text-xs text-[var(--muted)]">Structured analyses will appear when enrichment finishes.</p>
         )}
-        <ClaimAiAnalysisPanel slug={slug} />
+        {detail.generate_ai_analysis_available ? (
+          <ClaimAiAnalysisPanel slug={slug} lastAiRunAt={detail.last_ai_run_at} />
+        ) : (
+          aiBlockMessage && <p className="text-xs text-[var(--muted)]">{aiBlockMessage}</p>
+        )}
       </aside>
     </article>
   );

@@ -302,11 +302,13 @@ class ModerationService:
         )
 
     async def reprocess_pending(self, *, pending_id: UUID, actor_id: UUID | None) -> None:
-        """Reset pipeline to submitted for Celery re-run (failed or revision)."""
+        """Reset pipeline to submitted for Celery re-run (failed or revision only)."""
         pending = await self._claims.get_pending(pending_id)
         if pending is None:
             raise ValueError("pending_not_found")
         current = ProcessingStatus(str(pending.processing_status))
+        if current not in {ProcessingStatus.failed, ProcessingStatus.revision_requested}:
+            raise ValueError("reprocess_not_allowed")
         assert_pending_transition(current, ProcessingStatus.submitted)
         pending.processing_status = ProcessingStatus.submitted
         pending.error_message = None

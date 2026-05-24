@@ -42,6 +42,7 @@ class PendingClaimResponse(BaseModel):
     error_message: str | None = None
     public_slug: str | None = None
     created_at: datetime
+    last_ai_run_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -118,6 +119,9 @@ class ClaimDetailResponse(BaseModel):
     visibility_label: str | None = None
     moderation_reviewed: bool = False
     truth_label: str | None = None
+    last_ai_run_at: datetime | None = None
+    generate_ai_analysis_available: bool = False
+    generate_ai_analysis_block_reason: str | None = None
 
     model_config = {"from_attributes": True}
 

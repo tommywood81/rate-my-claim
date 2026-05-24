@@ -68,6 +68,9 @@ export type ClaimDetail = {
   visibility_label?: string | null;
   moderation_reviewed?: boolean;
   truth_label?: "supported" | "refuted" | "unclear" | null;
+  last_ai_run_at?: string | null;
+  generate_ai_analysis_available?: boolean;
+  generate_ai_analysis_block_reason?: "no_evidence" | "stub_provider" | string | null;
 };
 
 export type UserProfile = {

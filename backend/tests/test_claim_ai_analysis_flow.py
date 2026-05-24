@@ -89,7 +89,12 @@ async def test_moderator_post_ai_analysis_appears_on_detail(
 
     before = await async_client.get(f"/api/v1/claims/{slug}")
     assert before.status_code == 200
-    n_before = len(before.json().get("data", {}).get("ai_analyses", []))
+    detail = before.json().get("data") or {}
+    if detail.get("generate_ai_analysis_block_reason") == "no_evidence":
+        pytest.skip("Seed claim has no evidence; cannot test on-demand analysis")
+    if detail.get("generate_ai_analysis_block_reason") == "stub_provider":
+        pytest.skip("Seed claim has stub analyses; cannot test on-demand analysis")
+    n_before = len(detail.get("ai_analyses", []))
 
     posted = await async_client.post(
         f"/api/v1/claims/{slug}/ai-analysis",

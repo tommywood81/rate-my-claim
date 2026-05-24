@@ -7,6 +7,7 @@ import {
   ModerationTokenEstimator,
 } from "@/components/moderation-token-estimator";
 import { apiFetch } from "@/lib/api";
+import { formatLastAiRun } from "@/lib/claim-ai-moderation";
 
 type Pending = {
   id: string;
@@ -19,6 +20,7 @@ type Pending = {
   source_urls?: string[] | null;
   public_slug?: string | null;
   created_at: string;
+  last_ai_run_at?: string | null;
 };
 
 type LoadState = "loading" | "authorized" | "forbidden" | "error";
@@ -143,9 +145,7 @@ export default function ModerationPage() {
   const canApprove = (p: Pending) => p.processing_status === "awaiting_moderation";
   const canRevise = (p: Pending) => p.processing_status === "awaiting_moderation";
   const canReprocess = (p: Pending) =>
-    p.processing_status === "failed" ||
-    p.processing_status === "revision_requested" ||
-    p.processing_status === "awaiting_moderation";
+    p.processing_status === "failed" || p.processing_status === "revision_requested";
 
   return (
     <div className="space-y-4">
@@ -204,6 +204,14 @@ export default function ModerationPage() {
             <p className="text-xs text-[var(--muted)]">
               {p.id} · <span className="font-medium text-[var(--fg)]">{p.processing_status}</span> ·{" "}
               {new Date(p.created_at).toLocaleString()}
+              {p.last_ai_run_at && (
+                <>
+                  {" · "}
+                  <span title="Newest enrichment or analysis row for this submission">
+                    Last AI run {formatLastAiRun(p.last_ai_run_at)}
+                  </span>
+                </>
+              )}
               {p.public_slug && (
                 <>
                   {" · "}
@@ -281,7 +289,7 @@ export default function ModerationPage() {
                 className="rounded border border-[var(--border)] px-3 py-1 text-xs hover:bg-[var(--card)] disabled:opacity-45"
                 onClick={() => reprocess(p.id)}
                 disabled={!canReprocess(p)}
-                title={canReprocess(p) ? undefined : "Re-run enrichment after failed or revision"}
+                title={canReprocess(p) ? undefined : "Only after failed enrichment or revision requested"}
               >
                 Re-run enrichment
               </button>

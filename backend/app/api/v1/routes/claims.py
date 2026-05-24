@@ -33,6 +33,11 @@ from app.schemas.claims import (
 from app.schemas.common import CursorMeta, SuccessEnvelope
 from app.services.ai.factory import get_ai_provider
 from app.services.claim_analysis_service import add_structured_verdict_for_claim
+from app.services.claims.claim_ai_moderation import (
+    collect_claim_ai_context,
+    on_demand_analysis_available,
+    on_demand_analysis_block_reason,
+)
 from app.services.claims.ai_analyses_display import dedupe_public_ai_analyses
 from app.services.claims.claim_live_context import build_claim_live_context, merge_ai_analyses
 from app.services.claims.live_claim_sync import ensure_live_claim_for_pending, get_pending_for_claim
@@ -206,8 +211,17 @@ async def run_claim_ai_analysis(
     claim = await repo.load_claim_detail_bundle_by_slug(slug)
     if claim is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
-    provider = get_ai_provider(budget_scope=f"claim:{claim.id}")
     ai_repo = AIAnalysisRepository(db)
+    pending = await get_pending_for_claim(db, claim.id)
+    combined, _ = await collect_claim_ai_context(
+        ai_repo,
+        claim_id=claim.id,
+        pending_id=pending.id if pending is not None else None,
+    )
+    block = on_demand_analysis_block_reason(claim=claim, analyses=combined)
+    if block:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=block)
+    provider = get_ai_provider(budget_scope=f"claim:{claim.id}")
     row = await add_structured_verdict_for_claim(
         claim=claim,
         provider=provider,
@@ -260,8 +274,16 @@ async def claim_detail(
     from app.services.claims.claim_assessment import resolve_public_claim_scores
 
     pending_rows = (
-        await ai_repo.list_for_target("pending_claim", pending.id) if pending is not None else None
+        await ai_repo.list_for_target("pending_claim", pending.id) if pending is not None else []
     )
+    combined_analyses, last_ai_run_at = await collect_claim_ai_context(
+        ai_repo,
+        claim_id=claim.id,
+        pending_id=pending.id if pending is not None else None,
+    )
+    block_reason = on_demand_analysis_block_reason(claim=claim, analyses=combined_analyses)
+    can_generate = on_demand_analysis_available(claim=claim, analyses=combined_analyses)
+
     confidence_score, controversy_score, evidence_score = resolve_public_claim_scores(
         claim, pending_analyses=pending_rows
     )
@@ -296,6 +318,9 @@ async def claim_detail(
         visibility_label=live.visibility_label,
         moderation_reviewed=live.moderation_reviewed,
         truth_label=live.truth_label,
+        last_ai_run_at=last_ai_run_at,
+        generate_ai_analysis_available=can_generate,
+        generate_ai_analysis_block_reason=block_reason,
     )
     return SuccessEnvelope(data=detail)
 
