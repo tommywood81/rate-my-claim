@@ -6,6 +6,7 @@ import Link from "next/link";
 import { SubmitPipelineProgress } from "@/components/submit-pipeline-progress";
 import { apiFetch } from "@/lib/api";
 import {
+  PIPELINE_TERMINAL,
   submitStatusMessage,
 } from "@/lib/research-pipeline-ux";
 import type { ClaimDetail } from "@/lib/types";
@@ -120,7 +121,16 @@ export default function SubmitPage() {
     };
 
     void tick();
-    const interval = setInterval(() => void tick(), 2800);
+    const interval = setInterval(() => {
+      void (async () => {
+        const detail = await pollClaim(tracking.slug);
+        if (cancelled || !detail) return;
+        setClaimDetail(detail);
+        if (PIPELINE_TERMINAL.has(detail.processing_status ?? "")) {
+          clearInterval(interval);
+        }
+      })();
+    }, 2500);
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -194,7 +204,7 @@ export default function SubmitPage() {
   const processingStatus = claimDetail?.processing_status ?? (tracking ? "submitted" : null);
 
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className={`space-y-8 ${tracking ? "max-w-3xl" : "max-w-2xl"}`}>
       <header className="space-y-3 border-b border-[var(--border)] pb-6">
         <p className="owid-kicker">Contribute</p>
         <h1 className="owid-page-heading text-3xl">Submit a claim</h1>
