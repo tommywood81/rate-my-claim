@@ -17,52 +17,48 @@ export default async function Home() {
   return (
     <>
       <section className="owid-hero">
-        <p className="owid-kicker">Better than asking a chatbot</p>
-        <h1 className="owid-page-heading mt-3 max-w-3xl">
-          Claims with receipts — that stick around
-        </h1>
+        <p className="owid-kicker">Rate My Claim</p>
+        <h1 className="owid-page-heading mt-3 max-w-3xl">Claims with receipts</h1>
         <p className="owid-lead mt-4 max-w-2xl">
-          A language model will give you a confident paragraph and forget you by lunch. We go find sources,
-          line them up for and against, and leave the result on a page you (and everyone else) can revisit.
+          Knowledge shouldn&apos;t be a single answer. It should be a living, evidence-backed object.
         </p>
-        <ul className="mt-6 max-w-2xl space-y-2.5 text-sm leading-relaxed text-[var(--fg)]">
-          <li className="flex gap-2">
-            <span className="shrink-0 text-[var(--accent)]" aria-hidden>
-              →
-            </span>
-            <span>
-              <strong className="font-semibold">Real links, not vibes</strong> — your URLs plus claims already
-              in the library, not whatever the model hallucinated last week
-            </span>
-          </li>
-          <li className="flex gap-2">
-            <span className="shrink-0 text-[var(--accent)]" aria-hidden>
-              →
-            </span>
-            <span>
-              <strong className="font-semibold">One claim, one page</strong> — submit and it goes live; scores
-              and evidence fill in while the check runs
-            </span>
-          </li>
-          <li className="flex gap-2">
-            <span className="shrink-0 text-[var(--accent)]" aria-hidden>
-              →
-            </span>
-            <span>
-              <strong className="font-semibold">See the neighbours</strong> — search by meaning, browse
-              contradictions, poke the 3D claim map when you feel nerdy
-            </span>
-          </li>
-          <li className="flex gap-2">
-            <span className="shrink-0 text-[var(--accent)]" aria-hidden>
-              →
-            </span>
-            <span>
-              <strong className="font-semibold">AI on a leash</strong> — models draft the write-up; the source
-              list is what you actually argue about
-            </span>
-          </li>
-        </ul>
+
+        <div className="mt-8 max-w-2xl space-y-6">
+          <div>
+            <h2 className="text-lg font-semibold text-[var(--accent-dark)]">One claim. One page.</h2>
+            <ul className="mt-3 space-y-2.5 text-sm leading-relaxed text-[var(--fg)]">
+              <li>
+                Every claim is a living record — built from sources, counterpoints, and evolving evidence.
+              </li>
+              <li>
+                Claims are continuously re-checked as new information appears, not generated once and forgotten.
+              </li>
+              <li>
+                As evidence shifts, claims can be updated, disputed, or overturned — keeping the system aligned
+                with what&apos;s actually supported.
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h2 className="text-lg font-semibold text-[var(--accent-dark)]">Under the hood</h2>
+            <ul className="mt-3 space-y-2.5 text-sm leading-relaxed text-[var(--fg)]">
+              <li>
+                Each claim lives in a structured data model and is embedded in semantic space alongside related
+                claims.
+              </li>
+              <li>
+                Explore how claims connect, cluster, and contradict each other — and track how truth status
+                changes over time.{" "}
+                <Link href="/atlas" className="font-medium text-[var(--accent)] hover:underline">
+                  Open the claim map
+                </Link>
+                .
+              </li>
+            </ul>
+          </div>
+        </div>
+
         <SearchForm className="mt-8 max-w-2xl" large />
         <p className="mt-6 text-sm text-[var(--muted)]">
           <Link href="/submit" className="font-semibold text-[var(--accent-dark)]">
@@ -76,15 +72,19 @@ export default async function Home() {
       <section className="mb-4 grid gap-4 sm:grid-cols-3">
         <div className="owid-card-padded text-center sm:text-left">
           <p className="owid-display text-3xl text-[var(--accent-dark)]">{claims.length || "—"}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">Claims in the library right now</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">Living records in the library</p>
         </div>
         <div className="owid-card-padded text-center sm:text-left">
           <p className="owid-display text-3xl text-[var(--accent-dark)]">Live</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">Published instantly — the check catches up in the background</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            One claim, one page — published immediately, assessed in the background
+          </p>
         </div>
         <div className="owid-card-padded text-center sm:text-left">
-          <p className="owid-display text-3xl text-[var(--accent-dark)]">No doomscroll</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">Evidence first. No outrage mechanics or engagement bait.</p>
+          <p className="owid-display text-3xl text-[var(--accent-dark)]">Evolving</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Truth status can shift as new sources arrive and claims are re-checked
+          </p>
         </div>
       </section>
 

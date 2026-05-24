@@ -55,10 +55,10 @@ export function SubmitPipelineProgress({
   return (
     <div className="space-y-4 rounded border border-[var(--accent)]/30 bg-[var(--accent-soft)]/40 p-4 sm:p-5">
       <div className="space-y-1">
-        <p className="owid-kicker text-[var(--accent-dark)]">You&apos;re live</p>
+        <p className="owid-kicker text-[var(--accent-dark)]">One claim. One page.</p>
         <p className="text-sm font-medium text-[var(--fg)]">
-          The background check is running. Your claim is already on the site — scores and summary update as we
-          go.
+          Your living record is already public. Sources, counterpoints, and truth status fill in as the assessment
+          runs — this page keeps updating.
         </p>
       </div>
 
@@ -98,7 +98,7 @@ export function SubmitPipelineProgress({
 
       <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-3">
         <Link href={claimHref} className="owid-btn-primary text-sm no-underline">
-          Open live claim page
+          Open claim page
         </Link>
         <span className="text-xs text-[var(--muted)]">
           {elapsedSec}s elapsed

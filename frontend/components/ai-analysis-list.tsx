@@ -20,7 +20,7 @@ export function AiAnalysisList({ items }: AiAnalysisListProps) {
         </li>
       ))}
       {items.length === 0 && (
-        <li className="text-[var(--muted)]">No AI write-up on this claim yet.</li>
+        <li className="text-[var(--muted)]">No assessment notes on this claim yet.</li>
       )}
     </ul>
   );

@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 
   title: "Browse claims",
 
-  description: "Browse published claims on Rate My Claim.",
+  description: "Browse living claim records — each with sources, counterpoints, and a truth status that can evolve.",
 
 };
 
@@ -75,9 +75,9 @@ export default async function BrowseClaimsPage({
         <h1 className="owid-page-heading text-3xl sm:text-4xl">Browse claims</h1>
 
         <p className="owid-lead text-base">
-          Every claim gets a public page. Ones still being checked show &quot;Checking…&quot; until the run
-          finishes. Want something specific? Try{" "}
-          <Link href="/search">search</Link> — it matches meaning, not just keywords.
+          Every claim is a living record with its own page — built from sources, counterpoints, and evolving
+          evidence. Rows still being assessed show &quot;Checking…&quot; until the run finishes.{" "}
+          <Link href="/search">Search</Link> matches meaning across the library, not just keywords.
         </p>
 
       </header>

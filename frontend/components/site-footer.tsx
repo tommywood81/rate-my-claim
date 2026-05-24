@@ -8,8 +8,8 @@ export function SiteFooter() {
           <div>
             <p className="owid-display text-lg text-[var(--accent-dark)]">Rate My Claim</p>
             <p className="mt-2 max-w-sm text-sm leading-relaxed text-[var(--muted)]">
-              Public claim pages with sources you can click. Less chatbot cosplay, more stuff that stays on the
-              record.
+              Living, evidence-backed claim pages — one record per claim, built to be re-checked as sources and
+              counterpoints accumulate.
             </p>
           </div>
           <div>
@@ -30,16 +30,16 @@ export function SiteFooter() {
             </ul>
           </div>
           <div>
-            <p className="owid-kicker">What we&apos;re going for</p>
+            <p className="owid-kicker">Principles</p>
             <ul className="mt-3 space-y-2 text-sm text-[var(--muted)]">
-              <li>Sources you can actually open</li>
-              <li>No engagement bait or outrage loops</li>
-              <li>Claims go live and can change as evidence rolls in</li>
+              <li>Sources, counterpoints, and evolving evidence on every page</li>
+              <li>Claims stay live and can be updated, disputed, or overturned</li>
+              <li>No engagement bait — knowledge as a structured object, not a hot take</li>
             </ul>
           </div>
         </div>
         <p className="mt-8 border-t border-[var(--border)] pt-6 text-xs text-[var(--muted)]">
-          Rate My Claim — calm publishing vibes, chaotic claim energy.
+          Rate My Claim — evidence-backed knowledge that stays on the record.
         </p>
       </div>
     </footer>

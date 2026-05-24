@@ -200,8 +200,9 @@ export default function SubmitPage() {
         <h1 className="owid-page-heading text-3xl">Submit a claim</h1>
       </header>
       <p className="owid-lead text-base">
-        Anyone can submit. Your claim goes live right away; we hunt sources and fill in scores in the background.
-        Staff can tidy wording later — nothing waits in a approval queue.
+        Submit a claim and get a live page immediately — one claim, one record. We gather sources and counterpoints
+        in the background; truth status and scores update as the assessment runs and can change when new evidence
+        appears.
       </p>
       <p className="owid-card px-4 py-3 text-sm text-[var(--muted)]">
         <span className="font-medium text-[var(--fg)]">Signed in?</span> Submissions are linked to your account so you
@@ -244,7 +245,7 @@ export default function SubmitPage() {
             minLength={10}
             rows={6}
             className="owid-input w-full p-3 text-sm"
-            placeholder="One clear claim — the kind you could argue with evidence…"
+            placeholder="State one clear, testable claim…"
           />
           <textarea
             value={urls}

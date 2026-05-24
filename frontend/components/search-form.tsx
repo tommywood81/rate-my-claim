@@ -26,7 +26,7 @@ export function SearchForm({
         name="q"
         type="search"
         defaultValue={defaultQuery}
-        placeholder="Search claims — try meaning or keywords…"
+        placeholder="Search claims by meaning or keywords…"
         className={`owid-input flex-1 ${large ? "min-h-[3rem] text-lg" : ""}`}
         autoComplete="off"
       />

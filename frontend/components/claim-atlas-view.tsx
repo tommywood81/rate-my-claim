@@ -479,7 +479,7 @@ export function ClaimAtlasView() {
       {!isFullscreen && (
         <p className="text-xs text-[var(--muted)]">
           Drag to rotate · scroll to zoom · click a point to select. After 5s without input the view slowly spins.
-          Nearby dots sound similar — they can still disagree on the verdict.
+          Similar wording clusters together — truth status can still differ. Open a dot for the full living record.
         </p>
       )}
     </div>

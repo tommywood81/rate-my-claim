@@ -167,8 +167,8 @@ export function ClaimGraphPanel({ slug, initialGraph }: { slug: string; initialG
             How this claim connects to others
           </h2>
           <p className="text-xs text-[var(--muted)]">
-            Contradictions, dependencies, and &quot;actually, it&apos;s more like…&quot; links. Drag nodes; zoom with
-            the controls.
+            Connections, contradictions, and clusters — how this claim relates to others in the library. Drag
+            nodes; zoom with the controls.
           </p>
         </div>
         {graphMeta.truncated && (

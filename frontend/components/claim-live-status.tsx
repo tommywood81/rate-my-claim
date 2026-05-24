@@ -51,7 +51,7 @@ export function ClaimLiveStatus({ slug, initial }: Props) {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium text-[var(--fg)]">
-          {checking ? "Checking this claim…" : assessed ? "Live — check complete" : "Live claim"}
+          {checking ? "Assessing…" : assessed ? "Live — assessment complete" : "Live record"}
           {detail.visibility_label ? (
             <span className="ml-2 rounded-full border border-[var(--border)] bg-white px-2 py-0.5 text-xs font-normal text-[var(--muted)]">
               {detail.visibility_label}
@@ -66,14 +66,14 @@ export function ClaimLiveStatus({ slug, initial }: Props) {
         <>
           <ClaimPipelineStepper currentKey={detail.pipeline_stage_key} />
           <p className="text-xs text-[var(--muted)]">
-            The check runs in the background. This block updates when there&apos;s news.
+            Assessment runs in the background. This block updates as truth status and evidence evolve.
           </p>
         </>
       )}
       {assessed && (
         <p className="text-xs text-[var(--muted)]">
-          From our library and linked sources — not human editorial sign-off. Staff may edit or remove claims
-          later.
+          From the claim library and submitted links — not human editorial sign-off. Records can be updated,
+          disputed, or overturned as new sources appear.
         </p>
       )}
       {detail.live_ai_summary && (

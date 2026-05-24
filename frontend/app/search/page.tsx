@@ -60,8 +60,8 @@ export default async function SearchPage({
         <p className="owid-kicker">Explore</p>
         <h1 className="owid-page-heading text-3xl sm:text-4xl">Search claims</h1>
         <p className="owid-lead text-base">
-          Find claims by what they mean, not just the exact words. We weigh similarity, source quality, and how
-          fresh the assessment is.
+          Search the claim library by meaning — claims live in semantic space alongside related statements. Results
+          weigh similarity, source quality, and how recently the truth status was assessed.
         </p>
       </header>
 
@@ -89,7 +89,9 @@ export default async function SearchPage({
       )}
 
       {!q && (
-        <p className="text-sm text-[var(--muted)]">Type a question or claim — we&apos;ll find close matches.</p>
+        <p className="text-sm text-[var(--muted)]">
+          Search by question or claim wording — we surface close matches in the library.
+        </p>
       )}
 
       {q && (
