@@ -20,6 +20,7 @@ from app.services.ingestion.canonicalization_service import CanonicalizationServ
 from app.services.ingestion.claim_normalization import normalize_claim_text
 from app.services.ingestion.duplicate_detection_service import DuplicateDetectionService
 from app.services.ingestion.pipeline_audit import IngestionPipelineAudit
+from app.services.claims.assessment_finalize import finalize_pending_assessment
 from app.services.claims.live_claim_sync import sync_pending_to_linked_claim
 from app.services.evidence.ingestion_service import EvidenceIngestionService
 
@@ -238,16 +239,20 @@ async def _run_pipeline(pending_id: UUID) -> None:
             else:
                 summary = _research_summary_from_scores(scores, has_corpus_evidence=False)
             pending.ai_summary = summary
-            pending.processing_status = ProcessingStatus.awaiting_moderation
+            await finalize_pending_assessment(
+                session,
+                pending_id,
+                created_by_job="enrichment",
+                explanation="Automated assessment published after enrichment.",
+            )
             await audit.log_stage(
                 pending_id=pending_id,
-                stage="awaiting_moderation",
+                stage="assessment_complete",
                 details={
                     "duplicate_count": len(pending.duplicate_candidate_ids or []),
                     "url_blocks": len(url_blocks),
                 },
             )
-            await sync_pending_to_linked_claim(session, pending_id)
             await session.commit()
         except TokenBudgetExceeded as exc:
             logger.warning(

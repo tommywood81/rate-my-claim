@@ -2,13 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import { SubmitPipelineProgress } from "@/components/submit-pipeline-progress";
 import { apiFetch } from "@/lib/api";
 import {
-  PIPELINE_TERMINAL,
-  isPipelineInFlight,
   submitStatusMessage,
 } from "@/lib/research-pipeline-ux";
 import type { ClaimDetail } from "@/lib/types";
@@ -35,7 +32,6 @@ type TrackingState = {
 };
 
 export default function SubmitPage() {
-  const router = useRouter();
   const [text, setText] = useState("");
   const [urls, setUrls] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -48,7 +44,6 @@ export default function SubmitPage() {
   const [tracking, setTracking] = useState<TrackingState | null>(null);
   const [claimDetail, setClaimDetail] = useState<ClaimDetail | null>(null);
   const [indexedClaims, setIndexedClaims] = useState<number | undefined>(undefined);
-  const [autoRedirectSec, setAutoRedirectSec] = useState<number | null>(null);
   const trackStartedAt = useRef<number | null>(null);
 
   useEffect(() => {
@@ -119,11 +114,6 @@ export default function SubmitPage() {
         const detail = await pollClaim(tracking.slug);
         if (cancelled || !detail) return;
         setClaimDetail(detail);
-        if (PIPELINE_TERMINAL.has(detail.processing_status ?? "")) {
-          if (detail.processing_status === "awaiting_moderation" || detail.processing_status === "completed") {
-            setAutoRedirectSec(4);
-          }
-        }
       } catch {
         /* keep polling */
       }
@@ -137,27 +127,11 @@ export default function SubmitPage() {
     };
   }, [tracking?.slug, pollClaim]);
 
-  useEffect(() => {
-    if (autoRedirectSec == null || !tracking?.slug) return;
-    if (autoRedirectSec <= 0) {
-      try {
-        sessionStorage.setItem("rmc_just_submitted_slug", tracking.slug);
-      } catch {
-        /* private mode */
-      }
-      router.push(`/claims/${encodeURIComponent(tracking.slug)}?submitted=1`);
-      return;
-    }
-    const t = setTimeout(() => setAutoRedirectSec((s) => (s != null ? s - 1 : null)), 1000);
-    return () => clearTimeout(t);
-  }, [autoRedirectSec, tracking?.slug, router]);
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
     setTracking(null);
     setClaimDetail(null);
-    setAutoRedirectSec(null);
     if (!csrfReady) {
       setMsg("Preparing secure session… try again in a moment.");
       return;
@@ -218,7 +192,6 @@ export default function SubmitPage() {
   }
 
   const processingStatus = claimDetail?.processing_status ?? (tracking ? "submitted" : null);
-  const inFlight = isPipelineInFlight(processingStatus);
 
   return (
     <div className="max-w-2xl space-y-8">
@@ -258,7 +231,6 @@ export default function SubmitPage() {
           duplicateCount={tracking.duplicateCount}
           canonicalCandidate={tracking.canonicalCandidate}
           errorMessage={tracking.errorMessage}
-          autoRedirectSec={inFlight ? null : autoRedirectSec}
         />
       )}
 
@@ -325,7 +297,6 @@ export default function SubmitPage() {
             onClick={() => {
               setTracking(null);
               setClaimDetail(null);
-              setAutoRedirectSec(null);
               setText("");
               setUrls("");
             }}

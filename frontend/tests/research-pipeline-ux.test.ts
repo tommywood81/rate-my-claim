@@ -44,6 +44,6 @@ describe("buildSubmitOutcomes", () => {
     } as ClaimDetail;
     const out = buildSubmitOutcomes(detail, {});
     expect(out.some((o) => o.id === "canonical")).toBe(true);
-    expect(out.some((o) => o.id === "truth")).toBe(true);
+    expect(out.some((o) => o.text.includes("Assessment: supported"))).toBe(true);
   });
 });

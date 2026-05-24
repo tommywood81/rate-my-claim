@@ -116,7 +116,7 @@ export default function ModerationPage() {
           target_id: id,
           explanation:
             action === "approve_claim"
-              ? "Approved via UI"
+              ? "Published stale assessment via maintenance UI"
               : action === "reject_claim"
                 ? "Rejected via UI"
                 : "Revision requested via UI",
@@ -142,7 +142,7 @@ export default function ModerationPage() {
     }
   }
 
-  const canApprove = (p: Pending) => p.processing_status === "awaiting_moderation";
+  const canPublishStale = (p: Pending) => p.processing_status === "awaiting_moderation";
   const canRevise = (p: Pending) => p.processing_status === "awaiting_moderation";
   const canReprocess = (p: Pending) =>
     p.processing_status === "failed" || p.processing_status === "revision_requested";
@@ -151,7 +151,7 @@ export default function ModerationPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="owid-kicker">Moderation</p>
-        <h1 className="owid-page-heading text-3xl">Review queue</h1>
+        <h1 className="owid-page-heading text-3xl">Claim maintenance</h1>
         {loadState === "authorized" && (
           <button
             type="button"
@@ -176,12 +176,9 @@ export default function ModerationPage() {
       {loadState === "authorized" && (
         <>
           <p className="text-sm text-[var(--muted)]">
-            Submissions appear here as soon as they are queued. <strong>Approve</strong> is only available when the
-            background worker has finished enrichment and status is{" "}
-            <code className="text-xs">awaiting_moderation</code>. You can <strong>Reject</strong> earlier if needed. If
-            a row stays in <code className="text-xs">submitted</code> or <code className="text-xs">failed</code>, check
-            that the Celery worker is running and that <code className="text-xs">OPENAI_API_KEY</code> is set for AI
-            steps.
+            Claims go live and are assessed automatically. This queue is for{" "}
+            <strong>maintenance only</strong>: withdraw spam, request resubmission, re-run failed enrichment, or
+            publish stale assessments stuck before auto-complete. Most rows leave the queue once assessment finishes.
           </p>
           <ModerationTokenEstimator
             rows={rows.map((p) => ({
@@ -262,11 +259,11 @@ export default function ModerationPage() {
               <button
                 type="button"
                 className="rounded border border-[var(--border)] px-3 py-1 text-xs enabled:hover:bg-[var(--card)] disabled:cursor-not-allowed disabled:opacity-45"
-                onClick={() => act(p.id, "approve_claim")}
-                disabled={!canApprove(p)}
-                title={canApprove(p) ? undefined : "Wait until status is awaiting_moderation"}
+                onClick={() => act(p.id, "approve_claim", false)}
+                disabled={!canPublishStale(p)}
+                title={canPublishStale(p) ? undefined : "Only for legacy rows stuck before auto-complete"}
               >
-                Mark reviewed
+                Publish assessment
               </button>
               <button
                 type="button"

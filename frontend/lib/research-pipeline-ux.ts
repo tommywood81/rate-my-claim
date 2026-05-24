@@ -6,8 +6,7 @@ export const PIPELINE_STAGES = [
   { key: "received", label: "Received", hint: "Claim registered and published live." },
   { key: "analyzing", label: "Analyzing", hint: "Embedding, duplicate check, and canonical wording." },
   { key: "gathering_evidence", label: "Gathering evidence", hint: "Archive search, URLs, and research pass." },
-  { key: "ai_complete", label: "Complete (AI)", hint: "Provisional verdict ready; moderation may refine." },
-  { key: "moderated", label: "Moderated", hint: "A moderator has reviewed this claim." },
+  { key: "assessed", label: "Assessment complete", hint: "Automated research and verdict are on your claim page." },
 ] as const;
 
 export type PipelineStageKey = (typeof PIPELINE_STAGES)[number]["key"];
@@ -59,9 +58,8 @@ export function processingStatusToStageKey(
     case "enriching":
       return "gathering_evidence";
     case "awaiting_moderation":
-      return "ai_complete";
     case "completed":
-      return "moderated";
+      return "assessed";
     case "revision_requested":
       return "revised" as PipelineStageKey;
     case "failed":
@@ -128,23 +126,15 @@ export function pipelineAgentState(processingStatus: string | null | undefined):
           "Ingesting URLs, searching the corpus, and running confidence / verdict analysis.",
       };
     case "awaiting_moderation":
-      return {
-        overallPercent: 100,
-        researchPercent: 100,
-        decisionPercent: 100,
-        researchLabel: "Research complete",
-        decisionLabel: "Decision ready",
-        detailMessage:
-          "Automated research and AI decision pass are done. A moderator may still refine scores and citations.",
-      };
     case "completed":
       return {
         overallPercent: 100,
         researchPercent: 100,
         decisionPercent: 100,
-        researchLabel: "Reviewed",
-        decisionLabel: "Reviewed",
-        detailMessage: "A moderator has marked this claim reviewed.",
+        researchLabel: "Assessment complete",
+        decisionLabel: "Assessment complete",
+        detailMessage:
+          "Automated research finished. Scores, summary, and any matched sources are on your live claim page.",
       };
     case "failed":
       return {
@@ -153,7 +143,7 @@ export function pipelineAgentState(processingStatus: string | null | undefined):
         decisionPercent: 0,
         researchLabel: "Interrupted",
         decisionLabel: "Interrupted",
-        detailMessage: "Enrichment failed. Moderators can re-run the pipeline from the review queue.",
+        detailMessage: "Assessment failed. Staff can re-run the pipeline from the maintenance queue.",
       };
     case "rejected":
       return {
@@ -162,7 +152,7 @@ export function pipelineAgentState(processingStatus: string | null | undefined):
         decisionPercent: 0,
         researchLabel: "Withdrawn",
         decisionLabel: "Withdrawn",
-        detailMessage: "This submission was withdrawn from the public queue.",
+        detailMessage: "This submission was withdrawn from the public catalog.",
       };
     case "revision_requested":
       return {
@@ -208,17 +198,16 @@ export function submitActiveStageMessage(
       if (ctx.sourceUrlCount > 0) {
         return `Reading ${ctx.sourceUrlCount} linked source${ctx.sourceUrlCount === 1 ? "" : "s"}, ${archive.toLowerCase()} Running AI verdict pass (often 20–40s).`;
       }
-      return `${archive} Running AI confidence and provisional verdict (often 20–40s).`;
+      return `${archive} Running AI confidence and verdict (often 20–40s).`;
     case "awaiting_moderation":
-      return "Research complete — provisional verdict is on your live claim page (unverified until moderated).";
     case "completed":
-      return "Moderator review complete.";
+      return "Assessment complete — open your live claim page for the verdict and sources.";
     case "failed":
-      return "Pipeline interrupted — you can still open the live claim or ask a moderator to re-run enrichment.";
+      return "Pipeline interrupted — you can still open the live claim or ask staff to re-run enrichment.";
     case "revision_requested":
-      return "A moderator requested changes before research continues.";
+      return "An updated submission is needed before research continues.";
     case "rejected":
-      return "This submission was withdrawn from the public queue.";
+      return "This submission was withdrawn from the public catalog.";
     default:
       return "Connecting to the research pipeline…";
   }
@@ -250,15 +239,20 @@ export function buildSubmitOutcomes(
   if (dup > 0) {
     out.push({
       id: "duplicates",
-      text: `${dup} similar claim${dup === 1 ? "" : "s"} flagged for review.`,
+      text: `${dup} similar claim${dup === 1 ? "" : "s"} flagged in the archive.`,
     });
-  } else if (detail?.processing_status && ["duplicate_check", "canonicalizing", "enriching", "awaiting_moderation", "completed"].includes(detail.processing_status)) {
+  } else if (
+    detail?.processing_status &&
+    ["duplicate_check", "canonicalizing", "enriching", "awaiting_moderation", "completed"].includes(
+      detail.processing_status,
+    )
+  ) {
     out.push({ id: "duplicates-none", text: "No close duplicates found in the archive." });
   }
   if (detail?.evidence_count && detail.evidence_count > 0) {
     out.push({
       id: "evidence",
-      text: `${detail.evidence_count} evidence item${detail.evidence_count === 1 ? "" : "s"} on record.`,
+      text: `${detail.evidence_count} source${detail.evidence_count === 1 ? "" : "s"} matched on record.`,
     });
   }
   const summary = detail?.live_ai_summary?.trim();
@@ -269,10 +263,13 @@ export function buildSubmitOutcomes(
   if (detail?.truth_label && detail.truth_label !== "unclear") {
     out.push({
       id: "truth",
-      text: `Provisional assessment: ${detail.truth_label} (AI, unverified).`,
+      text: `Assessment: ${detail.truth_label} (AI + archive).`,
     });
-  } else if (detail?.processing_status === "awaiting_moderation") {
-    out.push({ id: "truth-unclear", text: "Provisional assessment: inconclusive (AI, unverified)." });
+  } else if (
+    detail?.processing_status === "awaiting_moderation" ||
+    detail?.processing_status === "completed"
+  ) {
+    out.push({ id: "truth-unclear", text: "Assessment: inconclusive or limited sources." });
   }
   if (extras.errorMessage?.trim()) {
     out.push({ id: "error", text: extras.errorMessage.trim() });
@@ -307,11 +304,18 @@ export function claimPollingHint(
     return "Taking longer than usual — the research agent may be waiting on the AI provider or URL ingestion.";
   }
   if (elapsedSec >= 20) {
-    return "Still running — gathering evidence and running the decision model.";
+    return "Still running — gathering evidence and running the assessment model.";
   }
   return null;
 }
 
 export function isPipelineInFlight(processingStatus: string | null | undefined): boolean {
   return Boolean(processingStatus && !PIPELINE_TERMINAL.has(processingStatus));
+}
+
+export function isAssessmentComplete(detail: ClaimDetail | null | undefined): boolean {
+  if (!detail) return false;
+  if (detail.assessment_complete) return true;
+  const proc = detail.processing_status;
+  return proc === "completed" || proc === "awaiting_moderation";
 }

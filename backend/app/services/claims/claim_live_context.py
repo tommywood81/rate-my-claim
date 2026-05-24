@@ -9,6 +9,7 @@ from app.schemas.claims import AIAnalysisResponse
 from app.services.claims.claim_assessment import truth_label_from_analyses
 from app.services.claims.live_summary import resolve_live_ai_summary
 from app.services.claims.pipeline_labels import (
+    assessment_complete as pipeline_assessment_complete,
     pipeline_stage_key,
     pipeline_stage_label,
     visibility_label,
@@ -25,17 +26,16 @@ class ClaimLiveContext:
     pipeline_stage_label: str | None
     live_ai_summary: str | None
     visibility_label: str
+    assessment_complete: bool
     moderation_reviewed: bool
     pending_ai_analyses: list[AIAnalysisResponse]
     truth_label: str | None
 
 
-def _moderation_reviewed(pending: PendingClaim | None, claim: Claim) -> bool:
-    if claim.last_reviewed_at is not None:
+def _assessment_complete(pending: PendingClaim | None, claim: Claim) -> bool:
+    if pending is not None and pipeline_assessment_complete(str(pending.processing_status)):
         return True
-    if pending is None:
-        return False
-    return ProcessingStatus(str(pending.processing_status)) == ProcessingStatus.completed
+    return claim.last_reviewed_at is not None and bool(claim.embedding_at)
 
 
 async def build_claim_live_context(
@@ -55,11 +55,11 @@ async def build_claim_live_context(
             if text.startswith("ProcessingStatus."):
                 text = text.split(".", 1)[1]
             proc = text
-    reviewed = _moderation_reviewed(pending, claim)
+    complete = _assessment_complete(pending, claim)
     vis = visibility_label(
         processing_status=proc,
         claim_status=str(claim.status),
-        moderation_reviewed=reviewed,
+        evidence_count=int(claim.evidence_count or 0),
     )
 
     pending_analyses: list[AIAnalysisResponse] = []
@@ -89,7 +89,8 @@ async def build_claim_live_context(
         pipeline_stage_label=pipeline_stage_label(proc),
         live_ai_summary=live_summary,
         visibility_label=vis,
-        moderation_reviewed=reviewed,
+        assessment_complete=complete,
+        moderation_reviewed=complete,
         pending_ai_analyses=pending_analyses,
         truth_label=truth_label,
     )

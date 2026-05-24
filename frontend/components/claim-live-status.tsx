@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ClaimPipelineStepper } from "@/components/claim-pipeline-stepper";
 import { apiFetch } from "@/lib/api";
+import { isAssessmentComplete } from "@/lib/research-pipeline-ux";
 import type { ClaimDetail } from "@/lib/types";
 
-const TERMINAL = new Set(["completed", "rejected", "failed"]);
+const ACTIVE = new Set(["submitted", "embedding", "duplicate_check", "canonicalizing", "enriching"]);
 
 type Props = {
   slug: string;
@@ -31,7 +32,7 @@ export function ClaimLiveStatus({ slug, initial }: Props) {
 
   useEffect(() => {
     const proc = detail.processing_status;
-    if (!proc || TERMINAL.has(proc)) {
+    if (!proc || !ACTIVE.has(proc)) {
       return;
     }
     const id = setInterval(() => {
@@ -40,7 +41,8 @@ export function ClaimLiveStatus({ slug, initial }: Props) {
     return () => clearInterval(id);
   }, [detail.processing_status, refresh]);
 
-  const processing = detail.processing_status && !TERMINAL.has(detail.processing_status);
+  const checking = detail.processing_status && ACTIVE.has(detail.processing_status);
+  const assessed = isAssessmentComplete(detail);
 
   return (
     <section
@@ -49,7 +51,7 @@ export function ClaimLiveStatus({ slug, initial }: Props) {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium text-[var(--fg)]">
-          {processing ? "Research in progress" : "Live claim"}
+          {checking ? "Checking this claim…" : assessed ? "Live — AI assessment" : "Live claim"}
           {detail.visibility_label ? (
             <span className="ml-2 rounded-full border border-[var(--border)] bg-white px-2 py-0.5 text-xs font-normal text-[var(--muted)]">
               {detail.visibility_label}
@@ -57,28 +59,26 @@ export function ClaimLiveStatus({ slug, initial }: Props) {
           ) : null}
         </p>
         {detail.pipeline_stage_label && (
-          <p className="text-xs text-[var(--muted)]">Current: {detail.pipeline_stage_label}</p>
+          <p className="text-xs text-[var(--muted)]">{detail.pipeline_stage_label}</p>
         )}
       </div>
-      {processing && (
+      {checking && (
         <>
           <ClaimPipelineStepper currentKey={detail.pipeline_stage_key} />
           <p className="text-xs text-[var(--muted)]">
-            This page updates as enrichment runs. Moderators may refine the claim at any time; visibility is not
-            blocked by review.
+            Automated research runs in the background. This page updates when the assessment is ready.
           </p>
         </>
       )}
-      {!processing && detail.moderation_reviewed && (
+      {assessed && (
         <p className="text-xs text-[var(--muted)]">
-          A moderator has reviewed this claim. Scores and evidence may still evolve.
+          Assessment from our archive and any linked sources — not human editorial sign-off. Staff may edit or
+          remove claims later.
         </p>
       )}
       {detail.live_ai_summary && (
         <div className="rounded border border-dashed border-[var(--border)] bg-[#faf9f6] p-3 text-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Evolving research summary
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Research summary</p>
           <p className="mt-2 leading-relaxed text-[var(--fg)]">{detail.live_ai_summary}</p>
         </div>
       )}

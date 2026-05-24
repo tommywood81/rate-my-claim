@@ -10,14 +10,14 @@ import { EvidenceList } from "@/components/evidence-list";
 import { ClaimTruthBanner } from "@/components/claim-truth-banner";
 import { ResearchPipelineProgress } from "@/components/research-pipeline-progress";
 import { apiFetch } from "@/lib/api";
-import { claimPollingHint } from "@/lib/research-pipeline-ux";
+import { claimPollingHint, isAssessmentComplete } from "@/lib/research-pipeline-ux";
 import type { ClaimDetail, ClaimGraph, ClaimTimeline as ClaimTimelineData } from "@/lib/types";
 
-import { ClaimAiAnalysisPanel } from "@/app/claims/[slug]/claim-ai-panel";
 import { ClaimGraphSection } from "@/app/claims/[slug]/claim-graph-section";
-import { formatLastAiRun, generateAiBlockMessage } from "@/lib/claim-ai-moderation";
+import { ClaimStaffAiTools } from "@/components/claim-staff-ai-tools";
+import { formatLastAiRun } from "@/lib/claim-ai-moderation";
 
-const TERMINAL = new Set(["completed", "rejected", "failed"]);
+const TERMINAL = new Set(["completed", "awaiting_moderation", "rejected", "failed", "revision_requested"]);
 
 /** Still running in Celery (not yet awaiting_moderation). */
 const ACTIVE_PIPELINE = new Set([
@@ -39,9 +39,6 @@ type Props = {
 function pollIntervalMs(status: string | null | undefined): number {
   if (status && ACTIVE_PIPELINE.has(status)) {
     return 2500;
-  }
-  if (status === "awaiting_moderation") {
-    return 8000;
   }
   return 0;
 }
@@ -111,7 +108,7 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
 
   useEffect(() => {
     const proc = detail.processing_status;
-    const stillRunning = proc && (ACTIVE_PIPELINE.has(proc) || proc === "awaiting_moderation");
+    const stillRunning = proc && ACTIVE_PIPELINE.has(proc);
     if (!stillRunning) return;
     const id = setInterval(() => {
       setPageElapsedSec(Math.floor((Date.now() - pageStartedAt.current) / 1000));
@@ -127,16 +124,14 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
 
   const proc = detail.processing_status;
   const inActivePipeline = proc ? ACTIVE_PIPELINE.has(proc) : false;
-  const awaitingAi = proc === "awaiting_moderation";
-  const processing = proc && !TERMINAL.has(proc);
+  const assessmentDone = isAssessmentComplete(detail);
+  const processing = proc && ACTIVE_PIPELINE.has(proc);
   const pollingHint = claimPollingHint(pageElapsedSec, proc);
 
   const totalEvidence =
     detail.evidence_supporting.length +
     detail.evidence_contradicting.length +
     detail.evidence_contextual.length;
-
-  const aiBlockMessage = generateAiBlockMessage(detail.generate_ai_analysis_block_reason);
 
   return (
     <article className="space-y-10">
@@ -180,9 +175,9 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
       )}
 
       <section className="owid-panel-live space-y-4" aria-live="polite">
-        {(processing || awaitingAi || showSubmittedBanner) && (
+        {(processing || showSubmittedBanner) && (
           <ResearchPipelineProgress
-            processingStatus={proc ?? "awaiting_moderation"}
+            processingStatus={proc ?? "submitted"}
             elapsedSec={inActivePipeline ? pageElapsedSec : undefined}
             pollingHint={pollingHint}
           />
@@ -194,9 +189,9 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
               <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-[var(--accent)]" />
             )}
             {inActivePipeline
-              ? "Research & decision agents running"
-              : awaitingAi
-                ? "Automated research complete"
+              ? "Checking this claim…"
+              : assessmentDone
+                ? "Live — AI assessment"
                 : "Live claim"}
             {detail.visibility_label ? (
               <span className="ml-2 owid-badge">
@@ -216,17 +211,19 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
           </div>
         </div>
 
-        {processing && (
+        {inActivePipeline && (
           <>
             <ClaimPipelineStepper currentKey={detail.pipeline_stage_key} pulsing={inActivePipeline} />
             <p className="text-xs text-[var(--muted)]">
-              {inActivePipeline
-                ? "This page refreshes every few seconds while the research and decision agents work."
-                : awaitingAi
-                  ? "Research and AI decision passes are done. A moderator may still refine evidence and scores."
-                  : "This claim is live; review may continue over time."}
+              This page refreshes every few seconds while automated research runs.
             </p>
           </>
+        )}
+
+        {assessmentDone && !inActivePipeline && (
+          <p className="text-xs text-[var(--muted)]">
+            AI assessment from our archive and linked sources — not human editorial sign-off.
+          </p>
         )}
 
         {detail.live_ai_summary && (
@@ -247,8 +244,7 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
           <p className="text-sm text-[var(--muted)]">{totalEvidence} sources on record</p>
         </div>
         <p className="text-sm text-[var(--muted)]">
-          Primary material for this claim. URL sources from your submission appear here after moderator review
-          syncs citations.
+          Sources matched from the archive and any URLs you submitted during enrichment.
         </p>
         <div className="space-y-8">
           <EvidenceList title="Supporting" items={detail.evidence_supporting} variant="prominent" />
@@ -308,11 +304,12 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
         {detail.ai_analyses.length === 0 && inActivePipeline && (
           <p className="text-xs text-[var(--muted)]">Structured analyses will appear when enrichment finishes.</p>
         )}
-        {detail.generate_ai_analysis_available ? (
-          <ClaimAiAnalysisPanel slug={slug} lastAiRunAt={detail.last_ai_run_at} />
-        ) : (
-          aiBlockMessage && <p className="text-xs text-[var(--muted)]">{aiBlockMessage}</p>
-        )}
+        <ClaimStaffAiTools
+          slug={slug}
+          lastAiRunAt={detail.last_ai_run_at}
+          generateAvailable={detail.generate_ai_analysis_available}
+          blockReason={detail.generate_ai_analysis_block_reason}
+        />
       </aside>
     </article>
   );

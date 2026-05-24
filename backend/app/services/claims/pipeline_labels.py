@@ -27,14 +27,9 @@ _PIPELINE_STAGES: list[tuple[frozenset[ProcessingStatus], str, str]] = [
         "Gathering evidence",
     ),
     (
-        frozenset({ProcessingStatus.awaiting_moderation}),
-        "ai_complete",
-        "Complete (AI)",
-    ),
-    (
-        frozenset({ProcessingStatus.completed}),
-        "moderated",
-        "Moderated",
+        frozenset({ProcessingStatus.awaiting_moderation, ProcessingStatus.completed}),
+        "assessed",
+        "Assessment complete",
     ),
     (
         frozenset({ProcessingStatus.revision_requested}),
@@ -44,7 +39,7 @@ _PIPELINE_STAGES: list[tuple[frozenset[ProcessingStatus], str, str]] = [
     (
         frozenset({ProcessingStatus.failed}),
         "failed",
-        "Analysis interrupted",
+        "Check interrupted",
     ),
     (
         frozenset({ProcessingStatus.rejected}),
@@ -57,8 +52,7 @@ _ORDER = [
     "received",
     "analyzing",
     "gathering_evidence",
-    "ai_complete",
-    "moderated",
+    "assessed",
 ]
 
 
@@ -100,13 +94,22 @@ def pipeline_stage_index(stage_key: str | None) -> int:
         return -1
 
 
+def assessment_complete(processing_status: str | None) -> bool:
+    """True when automated assessment has finished and the claim is fully live."""
+    proc = str(processing_status or "")
+    return proc in {
+        ProcessingStatus.completed.value,
+        ProcessingStatus.awaiting_moderation.value,
+    }
+
+
 def visibility_label(
     *,
     processing_status: str | None,
     claim_status: str,
-    moderation_reviewed: bool,
+    evidence_count: int = 0,
 ) -> str:
-    """Browse/list badge: processing vs live unverified vs live verified."""
+    """Browse/list badge: checking vs live (no human review tiers)."""
     proc = str(processing_status or "")
     if proc in {
         ProcessingStatus.submitted.value,
@@ -114,15 +117,16 @@ def visibility_label(
         ProcessingStatus.duplicate_check.value,
         ProcessingStatus.canonicalizing.value,
         ProcessingStatus.enriching.value,
-        ProcessingStatus.failed.value,
     }:
-        return "Processing"
+        return "Checking…"
+    if proc == ProcessingStatus.failed.value:
+        return "Check interrupted"
     if proc == ProcessingStatus.rejected.value:
         return "Withdrawn"
-    if moderation_reviewed or proc == ProcessingStatus.completed.value:
-        if claim_status == "verified":
-            return "Live (verified)"
-        return "Live (reviewed)"
     if proc == ProcessingStatus.revision_requested.value:
         return "Revision requested"
-    return "Live (unverified)"
+    if assessment_complete(proc):
+        if evidence_count >= 2:
+            return "Live · sourced"
+        return "Live"
+    return "Live"

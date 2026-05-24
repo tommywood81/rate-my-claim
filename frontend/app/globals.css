@@ -29,11 +29,11 @@ body {
   font-size: 1.0625rem;
 }
 
-a {
+a:not(.owid-nav-link):not(.owid-chip):not(.owid-display) {
   color: var(--accent);
   text-decoration: none;
 }
-a:hover {
+a:not(.owid-nav-link):not(.owid-chip):not(.owid-display):hover {
   text-decoration: underline;
 }
 
@@ -219,21 +219,6 @@ a:hover {
     border-color: #b8d4e3;
   }
 
-  .owid-nav-link {
-    font-size: 0.9375rem;
-    font-weight: 500;
-    color: var(--fg);
-    padding: 0.35rem 0.5rem;
-    border-radius: 2px;
-    text-decoration: none;
-  }
-
-  .owid-nav-link:hover {
-    color: var(--accent);
-    text-decoration: none;
-    background: var(--bg-subtle);
-  }
-
   .owid-chip {
     display: inline-block;
     padding: 0.25rem 0.75rem;
@@ -260,6 +245,39 @@ a:hover {
     color: #fff;
     background: var(--accent);
   }
+}
+
+/* Primary nav — outside @layer so active/hover styles win over global link rules */
+nav a.owid-nav-link {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--fg);
+  padding: 0.35rem 0.65rem;
+  border-radius: 2px;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+
+nav a.owid-nav-link:hover {
+  color: var(--accent);
+  text-decoration: none;
+  background: var(--bg-subtle);
+}
+
+nav a.owid-nav-link.owid-nav-link-active,
+nav a.owid-nav-link[aria-current="page"] {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  font-weight: 700;
+  border-bottom-color: var(--accent);
+}
+
+nav a.owid-nav-link.owid-nav-link-active:hover,
+nav a.owid-nav-link[aria-current="page"]:hover {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-bottom-color: var(--accent-dark);
 }
 
 @layer utilities {

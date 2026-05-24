@@ -27,7 +27,6 @@ type Props = {
   duplicateCount?: number;
   canonicalCandidate?: string | null;
   errorMessage?: string | null;
-  autoRedirectSec?: number | null;
 };
 
 export function SubmitPipelineProgress({
@@ -40,7 +39,6 @@ export function SubmitPipelineProgress({
   duplicateCount,
   canonicalCandidate,
   errorMessage,
-  autoRedirectSec,
 }: Props) {
   const stageKey = pipelineStageKey ?? processingStatusToStageKey(processingStatus);
   const stageIdx = pipelineStageIndex(stageKey);
@@ -107,15 +105,6 @@ export function SubmitPipelineProgress({
           {agent.overallPercent > 0 && agent.overallPercent < 100 ? ` · ~${agent.overallPercent}% automated pass` : ""}
         </span>
       </div>
-
-      {autoRedirectSec != null && autoRedirectSec > 0 && (
-        <p className="text-xs text-[var(--muted)]">
-          Opening claim page in {autoRedirectSec}s…{" "}
-          <Link href={claimHref} className="text-[var(--accent)]">
-            Go now
-          </Link>
-        </p>
-      )}
     </div>
   );
 }

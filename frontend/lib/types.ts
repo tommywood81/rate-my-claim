@@ -66,6 +66,7 @@ export type ClaimDetail = {
   pipeline_stage_label?: string | null;
   live_ai_summary?: string | null;
   visibility_label?: string | null;
+  assessment_complete?: boolean;
   moderation_reviewed?: boolean;
   truth_label?: "supported" | "refuted" | "unclear" | null;
   last_ai_run_at?: string | null;

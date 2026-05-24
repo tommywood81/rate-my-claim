@@ -181,15 +181,19 @@ async def list_claims(
         item = ClaimListItemResponse.model_validate(row)
         pending = pending_map.get(row.id)
         proc = str(pending.processing_status) if pending else None
-        reviewed = row.last_reviewed_at is not None or (
-            pending is not None and str(pending.processing_status) == "completed"
-        )
         vis = visibility_label(
             processing_status=proc,
             claim_status=str(row.status),
-            moderation_reviewed=reviewed,
+            evidence_count=int(row.evidence_count or 0),
         )
-        data.append(item.model_copy(update={"processing_status": proc, "visibility_label": vis}))
+        data.append(
+            item.model_copy(
+                update={
+                    "processing_status": proc,
+                    "visibility_label": vis,
+                }
+            )
+        )
     return SuccessEnvelope(
         data=data,
         meta=CursorMeta(next_cursor=next_c, previous_cursor=None, has_more=has_more).model_dump(),
@@ -316,7 +320,8 @@ async def claim_detail(
         pipeline_stage_label=live.pipeline_stage_label,
         live_ai_summary=live.live_ai_summary,
         visibility_label=live.visibility_label,
-        moderation_reviewed=live.moderation_reviewed,
+        moderation_reviewed=live.assessment_complete,
+        assessment_complete=live.assessment_complete,
         truth_label=live.truth_label,
         last_ai_run_at=last_ai_run_at,
         generate_ai_analysis_available=can_generate,

@@ -2,26 +2,22 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.claim import Claim, ClaimRevision, ClaimStatus, ProcessingStatus
-from app.models.evidence import Evidence, EvidenceSourceType, EvidenceStance
 from app.models.moderation import ModerationAction, ModerationActionType
 from app.core.metrics import record_moderation
 from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.repositories.claims_repository import ClaimRepository
-from app.services.ai.factory import get_ai_provider
 from app.services.moderation.state_machine import (
     assert_claim_status_transition,
     assert_pending_transition,
 )
 from app.services.claims.live_claim_sync import sync_pending_to_linked_claim
-from app.utils.slug import public_slug_for_claim
 
 logger = logging.getLogger(__name__)
 
@@ -70,12 +66,18 @@ class ModerationService:
         explanation: str | None,
         force_duplicate: bool = False,
     ) -> Claim:
-        """Promote pending submission to an approved claim with evidence."""
+        """Re-publish assessment to the live claim (maintenance; not a human approval gate)."""
+        from app.services.claims.assessment_finalize import finalize_pending_assessment
+
         pending = await self._claims.get_pending(pending_id)
         if pending is None:
             raise ValueError("pending_not_found")
         current = ProcessingStatus(str(pending.processing_status))
-        assert_pending_transition(current, ProcessingStatus.completed)
+        if current not in {
+            ProcessingStatus.awaiting_moderation,
+            ProcessingStatus.completed,
+        }:
+            assert_pending_transition(current, ProcessingStatus.completed)
 
         if not force_duplicate:
             for raw_id in pending.duplicate_candidate_ids or []:
@@ -89,173 +91,24 @@ class ModerationService:
                 if existing is not None:
                     raise ValueError(f"duplicate_of_claim:{existing.public_slug}")
 
-        canonical = pending.canonical_candidate_text or pending.raw_claim_text
-        analyses = await self._ai.list_for_target("pending_claim", pending_id)
-
-        if pending.linked_claim_id:
-            claim = await self._claims.get_claim_by_id(pending.linked_claim_id)
-            if claim is None:
-                raise ValueError("linked_claim_not_found")
-        else:
-            new_id = uuid4()
-            slug = public_slug_for_claim(canonical, new_id)
-            claim = Claim(
-                id=new_id,
-                public_slug=slug,
-                canonical_claim_text=canonical,
-                normalized_claim_text=pending.normalized_claim_text or canonical,
-                embedding=pending.embedding,
-                embedding_model=pending.embedding_model,
-                embedding_version=pending.embedding_version,
-                embedding_at=pending.embedding_at,
-                domain=None,
-                status=ClaimStatus.insufficient_evidence.value,
-                confidence_score=0.0,
-                controversy_score=0.0,
-                evidence_score=0.0,
-                freshness_score=0.5,
-                evidence_count=0,
-                created_by=pending.submitted_by,
-            )
-            self._session.add(claim)
-            pending.linked_claim_id = claim.id
-
-        from app.services.claims.claim_assessment import scores_from_pending_analyses
-
-        confidence, controversy, evidence_quality = scores_from_pending_analyses(analyses)
-        if confidence <= 0 and not analyses:
-            confidence = float(claim.confidence_score or 0.0)
-            controversy = float(claim.controversy_score or 0.0)
-            evidence_quality = float(claim.evidence_score or 0.0)
-
-        claim.canonical_claim_text = canonical
-        claim.normalized_claim_text = pending.normalized_claim_text or canonical
-        claim.embedding = pending.embedding
-        claim.embedding_model = pending.embedding_model
-        claim.embedding_version = pending.embedding_version
-        claim.embedding_at = pending.embedding_at
-        claim.confidence_score = confidence
-        claim.controversy_score = controversy
-        claim.evidence_score = evidence_quality
-        claim.last_reviewed_at = datetime.now(tz=UTC)
-
-        verdict_bundle: dict | None = None
-        for row in analyses:
-            if row.analysis_type == "structured_verdict" and row.structured_payload:
-                try:
-                    verdict_bundle = json.loads(row.structured_payload)
-                    break
-                except json.JSONDecodeError:
-                    continue
-
-        evidence_added = 0
-        provider = get_ai_provider(budget_scope=f"approve_pending:{pending_id}")
-        if verdict_bundle:
-            line_map_raw = verdict_bundle.get("line_map") or {}
-            line_map: dict[int, dict] = {}
-            for k, v in line_map_raw.items():
-                try:
-                    line_map[int(k)] = v  # type: ignore[arg-type]
-                except (TypeError, ValueError):
-                    continue
-            verdict = verdict_bundle.get("verdict") or {}
-            for cit in verdict.get("citations", []) or []:
-                try:
-                    line_no = int(cit.get("context_line", -1))
-                except (TypeError, ValueError):
-                    continue
-                block = line_map.get(line_no)
-                if not block or block.get("kind") != "url":
-                    continue
-                stance_str = str(cit.get("stance", "contextualizes")).lower()
-                stance = (
-                    EvidenceStance.supports
-                    if stance_str == "supports"
-                    else EvidenceStance.contradicts
-                    if stance_str == "contradicts"
-                    else EvidenceStance.contextualizes
-                )
-                ev = Evidence(
-                    claim_id=claim.id,
-                    source_type=EvidenceSourceType.manual_url,
-                    title=str(block.get("title") or block.get("url")),
-                    url=str(block.get("url")),
-                    publisher=str(block.get("publisher") or "") or None,
-                    summary=str(cit.get("note", ""))[:4000],
-                    cleaned_content=str(block.get("text", ""))[:8000],
-                    stance=stance,
-                    credibility_score=0.5,
-                    retrieval_timestamp=datetime.now(tz=UTC),
-                    retrieval_source="moderation_approve",
-                    created_by=actor_id,
-                )
-                self._session.add(ev)
-                text_for_emb = f"{ev.title}\n{ev.summary or ''}\n{ev.cleaned_content or ''}"[:8000]
-                vec, emb_model = await provider.generate_embedding(text_for_emb)
-                ev.embedding = vec
-                ev.embedding_model = emb_model
-                ev.embedding_version = pending.embedding_version
-                evidence_added += 1
-
-        await self._session.flush()
-        claim.evidence_count = evidence_added
-        citation_score = min(1.0, 0.2 * evidence_added)
-        claim.evidence_score = max(claim.evidence_score, citation_score)
-        if evidence_added > 0:
-            claim.status = ClaimStatus.weak_evidence.value
-
-        pending.processing_status = ProcessingStatus.completed
-        self._session.add(
-            ClaimRevision(
-                claim_id=claim.id,
-                previous_status=None,
-                new_status=str(claim.status),
-                previous_confidence=None,
-                new_confidence=claim.confidence_score,
-                explanation=explanation,
-                created_by=actor_id,
-                created_at=datetime.now(tz=UTC),
-            )
+        claim = await finalize_pending_assessment(
+            self._session,
+            pending_id,
+            actor_id=actor_id,
+            created_by_job="maintenance_resync",
+            explanation=explanation or "Assessment re-synced by staff.",
         )
+        if claim is None:
+            raise ValueError("linked_claim_not_found")
+
         await self._log_action(
             actor_id=actor_id,
             action_type=ModerationActionType.approve_claim,
             target_type="pending_claim",
             target_id=pending_id,
             explanation=explanation,
-            payload={"claim_id": str(claim.id)},
+            payload={"claim_id": str(claim.id), "maintenance_resync": True},
         )
-        await self._session.flush()
-        logger.info(
-            "claim_approved",
-            extra={"claim_id": str(claim.id), "pending_id": str(pending_id)},
-        )
-
-        imported_types: set[str] = set()
-        for row in analyses:
-            if row.analysis_type not in {"structured_verdict", "confidence_analysis"}:
-                continue
-            if row.analysis_type in imported_types:
-                continue
-            imported_types.add(row.analysis_type)
-            payload = None
-            if row.structured_payload:
-                try:
-                    payload = json.loads(row.structured_payload)
-                except json.JSONDecodeError:
-                    payload = None
-            await self._ai.add_analysis(
-                target_type="claim",
-                target_id=claim.id,
-                model_name=row.model_name,
-                provider=row.provider,
-                analysis_type=row.analysis_type,
-                generated_text=row.generated_text,
-                structured_payload=payload,
-                confidence=row.confidence,
-                created_by_job="approval_import",
-            )
-
         return claim
 
     async def reject_pending(

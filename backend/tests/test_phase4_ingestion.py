@@ -60,11 +60,15 @@ def test_claim_status_transition_rules() -> None:
 
 @pytest.mark.skipif(_SKIP, reason=_SKIP_REASON)
 @pytest.mark.asyncio
-async def test_ingestion_pipeline_reaches_awaiting_moderation(
+async def test_ingestion_pipeline_reaches_completed_assessment(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Submit → enrich (stub AI) → awaiting_moderation with embedding and audit."""
+    """Submit → enrich (stub AI) → completed with embedding and audit."""
+    monkeypatch.setattr(
+        "app.services.claims.assessment_finalize.get_ai_provider",
+        lambda **kwargs: StubAIProvider(),
+    )
     monkeypatch.setattr(
         "app.workers.tasks.enrichment_tasks.get_ai_provider",
         lambda **kwargs: StubAIProvider(),
@@ -110,7 +114,7 @@ async def test_ingestion_pipeline_reaches_awaiting_moderation(
     )
     assert status.status_code == 200
     data = status.json()["data"]
-    assert data["processing_status"] == ProcessingStatus.awaiting_moderation.value
+    assert data["processing_status"] == ProcessingStatus.completed.value
     assert data.get("canonical_candidate_text")
 
     async with AsyncSessionLocal() as session:
@@ -142,6 +146,10 @@ async def test_moderation_revision_and_claim_lifecycle(
 ) -> None:
     """Revision request, resubmit, approve; then dispute and restore approved claim."""
     stub = StubAIProvider()
+    monkeypatch.setattr(
+        "app.services.claims.assessment_finalize.get_ai_provider",
+        lambda **kwargs: stub,
+    )
     monkeypatch.setattr(
         "app.workers.tasks.enrichment_tasks.get_ai_provider",
         lambda **kwargs: stub,
