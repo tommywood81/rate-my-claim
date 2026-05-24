@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     default: "Rate My Claim",
     template: "%s · Rate My Claim",
   },
-  description: "Evidence-backed semantic claim intelligence platform",
+  description: "Public claim pages with sources, scores, and a library that outlasts your last ChatGPT thread.",
   metadataBase: process.env.NEXT_PUBLIC_SITE_URL
     ? new URL(process.env.NEXT_PUBLIC_SITE_URL)
     : undefined,

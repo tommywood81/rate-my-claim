@@ -12,10 +12,10 @@ export function ClaimTruthBanner({ label }: Props) {
         role="status"
         aria-live="polite"
       >
-        <p className="font-semibold">Assessment: this claim appears true</p>
+        <p className="font-semibold">Our read: this looks supported</p>
         <p className="mt-1 text-emerald-900/90">
-          Automated research supports the statement given current evidence and consensus. Moderators may
-          still refine sources and scores.
+          Matched sources lean yes given what we have on file. Still worth clicking the links — and the page can
+          change as new evidence shows up.
         </p>
       </div>
     );
@@ -28,10 +28,10 @@ export function ClaimTruthBanner({ label }: Props) {
         role="status"
         aria-live="polite"
       >
-        <p className="font-semibold">Assessment: this claim appears false</p>
+        <p className="font-semibold">Our read: this looks refuted</p>
         <p className="mt-1 text-amber-900/90">
-          Automated research does not support the statement as stated. Review evidence and the research
-          summary for detail.
+          Matched sources don&apos;t back the claim as stated. Check the contradicting evidence and summary for
+          nuance.
         </p>
       </div>
     );
@@ -43,9 +43,9 @@ export function ClaimTruthBanner({ label }: Props) {
       role="status"
       aria-live="polite"
     >
-      <p className="font-semibold">Assessment: inconclusive</p>
+      <p className="font-semibold">Our read: inconclusive</p>
       <p className="mt-1 text-[var(--muted)]">
-        Not enough evidence in the archive to call the claim clearly true or false yet.
+        Not enough sources in the library yet to call it clearly either way.
       </p>
     </div>
   );

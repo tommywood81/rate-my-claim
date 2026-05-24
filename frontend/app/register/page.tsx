@@ -9,8 +9,7 @@ export default function RegisterPage() {
         <p className="owid-kicker">Account</p>
         <h1 className="owid-page-heading text-3xl">Create an account</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          New accounts are standard users. Moderator access is assigned separately. After registering, sign in from
-          the login page.
+          Track your submissions and resubmit if we ask for a revision. Staff access is separate.
         </p>
       </div>
       <RegisterForm />

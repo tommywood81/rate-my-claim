@@ -55,10 +55,10 @@ export function SubmitPipelineProgress({
   return (
     <div className="space-y-4 rounded border border-[var(--accent)]/30 bg-[var(--accent-soft)]/40 p-4 sm:p-5">
       <div className="space-y-1">
-        <p className="owid-kicker text-[var(--accent-dark)]">Published live</p>
+        <p className="owid-kicker text-[var(--accent-dark)]">You&apos;re live</p>
         <p className="text-sm font-medium text-[var(--fg)]">
-          Background research is running. Your claim is already on the site — scores and summary update as
-          each stage completes.
+          The background check is running. Your claim is already on the site — scores and summary update as we
+          go.
         </p>
       </div>
 
@@ -102,7 +102,7 @@ export function SubmitPipelineProgress({
         </Link>
         <span className="text-xs text-[var(--muted)]">
           {elapsedSec}s elapsed
-          {agent.overallPercent > 0 && agent.overallPercent < 100 ? ` · ~${agent.overallPercent}% automated pass` : ""}
+          {agent.overallPercent > 0 && agent.overallPercent < 100 ? ` · ~${agent.overallPercent}% through` : ""}
         </span>
       </div>
     </div>

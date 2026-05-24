@@ -19,7 +19,7 @@ export async function generateMetadata({
   }
   return {
     title: `Search: ${q.slice(0, 60)}`,
-    description: `Hybrid semantic search results for “${q.slice(0, 120)}”.`,
+    description: `Search results for “${q.slice(0, 120)}”.`,
   };
 }
 
@@ -60,7 +60,8 @@ export default async function SearchPage({
         <p className="owid-kicker">Explore</p>
         <h1 className="owid-page-heading text-3xl sm:text-4xl">Search claims</h1>
         <p className="owid-lead text-base">
-          Hybrid ranking blends semantic similarity, text match, evidence quality, confidence, and freshness.
+          Find claims by what they mean, not just the exact words. We weigh similarity, source quality, and how
+          fresh the assessment is.
         </p>
       </header>
 
@@ -88,7 +89,7 @@ export default async function SearchPage({
       )}
 
       {!q && (
-        <p className="text-sm text-[var(--muted)]">Enter a query to search the claim index.</p>
+        <p className="text-sm text-[var(--muted)]">Type a question or claim — we&apos;ll find close matches.</p>
       )}
 
       {q && (

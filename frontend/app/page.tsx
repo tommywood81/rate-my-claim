@@ -15,16 +15,54 @@ export default async function Home() {
   const claims = await fetchRecentClaims();
 
   return (
-  <>
+    <>
       <section className="owid-hero">
-        <p className="owid-kicker">Evidence-backed claim intelligence</p>
+        <p className="owid-kicker">Better than asking a chatbot</p>
         <h1 className="owid-page-heading mt-3 max-w-3xl">
-          Research and data to evaluate empirical claims
+          Claims with receipts — that stick around
         </h1>
-        <p className="owid-lead mt-4">
-          Submit falsifiable claims, review cited evidence, and explore how statements relate in a durable claim graph.
-          AI assists interpretation; evidence and moderation stay authoritative.
+        <p className="owid-lead mt-4 max-w-2xl">
+          A language model will give you a confident paragraph and forget you by lunch. We go find sources,
+          line them up for and against, and leave the result on a page you (and everyone else) can revisit.
         </p>
+        <ul className="mt-6 max-w-2xl space-y-2.5 text-sm leading-relaxed text-[var(--fg)]">
+          <li className="flex gap-2">
+            <span className="shrink-0 text-[var(--accent)]" aria-hidden>
+              →
+            </span>
+            <span>
+              <strong className="font-semibold">Real links, not vibes</strong> — your URLs plus claims already
+              in the library, not whatever the model hallucinated last week
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <span className="shrink-0 text-[var(--accent)]" aria-hidden>
+              →
+            </span>
+            <span>
+              <strong className="font-semibold">One claim, one page</strong> — submit and it goes live; scores
+              and evidence fill in while the check runs
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <span className="shrink-0 text-[var(--accent)]" aria-hidden>
+              →
+            </span>
+            <span>
+              <strong className="font-semibold">See the neighbours</strong> — search by meaning, browse
+              contradictions, poke the 3D claim map when you feel nerdy
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <span className="shrink-0 text-[var(--accent)]" aria-hidden>
+              →
+            </span>
+            <span>
+              <strong className="font-semibold">AI on a leash</strong> — models draft the write-up; the source
+              list is what you actually argue about
+            </span>
+          </li>
+        </ul>
         <SearchForm className="mt-8 max-w-2xl" large />
         <p className="mt-6 text-sm text-[var(--muted)]">
           <Link href="/submit" className="font-semibold text-[var(--accent-dark)]">
@@ -38,25 +76,31 @@ export default async function Home() {
       <section className="mb-4 grid gap-4 sm:grid-cols-3">
         <div className="owid-card-padded text-center sm:text-left">
           <p className="owid-display text-3xl text-[var(--accent-dark)]">{claims.length || "—"}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">Recent public claims</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">Claims in the library right now</p>
         </div>
         <div className="owid-card-padded text-center sm:text-left">
           <p className="owid-display text-3xl text-[var(--accent-dark)]">Live</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">Claims visible while enrichment runs</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">Published instantly — the check catches up in the background</p>
         </div>
         <div className="owid-card-padded text-center sm:text-left">
-          <p className="owid-display text-3xl text-[var(--accent-dark)]">Open</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">Evidence-first, no engagement farming</p>
+          <p className="owid-display text-3xl text-[var(--accent-dark)]">No doomscroll</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">Evidence first. No outrage mechanics or engagement bait.</p>
         </div>
       </section>
 
       <section aria-labelledby="recent-claims-heading">
         <h2 id="recent-claims-heading" className="owid-section-heading">
-          Recently updated claims
+          Recently updated
         </h2>
         <ul className="owid-card-list mt-4">
           {claims.length === 0 && (
-            <li className="px-5 py-8 text-center text-sm text-[var(--muted)]">No public claims yet. Submit one to begin.</li>
+            <li className="px-5 py-8 text-center text-sm text-[var(--muted)]">
+              Nothing here yet.{" "}
+              <Link href="/submit" className="font-medium text-[var(--accent)]">
+                Submit the first claim
+              </Link>
+              .
+            </li>
           )}
           {claims.map((c) => (
             <li key={c.id} className="flex items-center justify-between gap-4 px-5 py-4 hover:bg-[var(--bg-subtle)]">
@@ -66,7 +110,9 @@ export default async function Home() {
               >
                 {c.canonical_claim_text}
               </Link>
-              <span className="shrink-0 owid-badge">discovery {c.discovery_score}</span>
+              {c.visibility_label ? (
+                <span className="shrink-0 owid-badge">{c.visibility_label}</span>
+              ) : null}
             </li>
           ))}
         </ul>

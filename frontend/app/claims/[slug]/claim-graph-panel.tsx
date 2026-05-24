@@ -164,10 +164,11 @@ export function ClaimGraphPanel({ slug, initialGraph }: { slug: string; initialG
       <header className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h2 id="graph-heading" className="owid-section-heading">
-            Relationship graph
+            How this claim connects to others
           </h2>
           <p className="text-xs text-[var(--muted)]">
-            Explore contradictions, dependencies, refinements, and causal links. Drag nodes; use controls to zoom.
+            Contradictions, dependencies, and &quot;actually, it&apos;s more like…&quot; links. Drag nodes; zoom with
+            the controls.
           </p>
         </div>
         {graphMeta.truncated && (

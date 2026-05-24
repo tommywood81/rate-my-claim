@@ -17,8 +17,7 @@ export default async function LoginPage({
         <p className="owid-kicker">Account</p>
         <h1 className="owid-page-heading text-3xl">Sign in</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Use a moderator or admin account for moderation and generating AI analysis on claims. Session uses secure
-          cookies on this site.
+          Sign in to link submissions to your account and resubmit after revision requests.
         </p>
       </div>
       {registered && (

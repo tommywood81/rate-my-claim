@@ -52,7 +52,7 @@ export function ResearchPipelineProgress({
   return (
     <div className={`space-y-3 ${compact ? "" : "rounded border border-[var(--border)] bg-white/80 p-3"}`}>
       <div className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
-        <span className="font-medium text-[var(--fg)]">Live pipeline</span>
+        <span className="font-medium text-[var(--fg)]">Live check</span>
         {typeof elapsedSec === "number" && inFlight && <span>{elapsedSec}s on this page</span>}
       </div>
 
@@ -62,7 +62,7 @@ export function ResearchPipelineProgress({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={state.overallPercent}
-        aria-label="Overall research and decision progress"
+        aria-label="Overall check progress"
       >
         <div
           className="h-full bg-[var(--accent-dark)] transition-all duration-500"
@@ -71,13 +71,13 @@ export function ResearchPipelineProgress({
       </div>
 
       <AgentRow
-        label="Research agent"
+        label="Finding sources"
         status={state.researchLabel}
         percent={state.researchPercent}
         active={state.researchPercent > 0 && state.researchPercent < 100}
       />
       <AgentRow
-        label="Decision agent"
+        label="Writing assessment"
         status={state.decisionLabel}
         percent={state.decisionPercent}
         active={state.decisionPercent > 0 && state.decisionPercent < 100}

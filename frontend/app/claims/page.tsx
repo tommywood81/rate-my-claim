@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 
   title: "Browse claims",
 
-  description: "Browse and filter published claims on Rate My Claim.",
+  description: "Browse published claims on Rate My Claim.",
 
 };
 
@@ -75,8 +75,9 @@ export default async function BrowseClaimsPage({
         <h1 className="owid-page-heading text-3xl sm:text-4xl">Browse claims</h1>
 
         <p className="owid-lead text-base">
-          Live claims with automated AI assessments. Rows still checking show &quot;Checking…&quot; until
-          enrichment finishes. Use <Link href="/search">search</Link> for hybrid semantic ranking.
+          Every claim gets a public page. Ones still being checked show &quot;Checking…&quot; until the run
+          finishes. Want something specific? Try{" "}
+          <Link href="/search">search</Link> — it matches meaning, not just keywords.
         </p>
 
       </header>

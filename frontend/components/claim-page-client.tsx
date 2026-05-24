@@ -136,12 +136,12 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
   return (
     <article className="space-y-10">
       <header className="space-y-4 border-b border-[var(--border)] pb-8">
-        <p className="owid-kicker">Canonical claim</p>
+        <p className="owid-kicker">The claim</p>
         <h1 className="owid-page-heading text-3xl sm:text-4xl">{detail.canonical_claim_text}</h1>
         <dl className="owid-stat-grid">
           <div className="owid-stat">
-            <dt title="How confident the automated assessment is in its verdict — not the probability the claim is true">
-              Assessment confidence
+            <dt title="How sure the automated check is about its verdict — not the probability the claim is true">
+              Check confidence
             </dt>
             <dd>{detail.confidence_score.toFixed(2)}</dd>
           </div>
@@ -169,8 +169,8 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
 
       {showSubmittedBanner && (
         <p className="owid-card border-l-4 border-l-[var(--accent)] px-4 py-3 text-sm text-[var(--fg)]">
-          Submission received. Your claim is <strong>live</strong> — watch the research agent gather evidence
-          and the decision agent produce scores and a verdict below.
+          Submission received — you&apos;re <strong>live</strong>. We&apos;re gathering sources and drafting the
+          assessment below; this page updates on its own.
         </p>
       )}
 
@@ -191,7 +191,7 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
             {inActivePipeline
               ? "Checking this claim…"
               : assessmentDone
-                ? "Live — AI assessment"
+                ? "Live — check complete"
                 : "Live claim"}
             {detail.visibility_label ? (
               <span className="ml-2 owid-badge">
@@ -200,7 +200,7 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
             ) : null}
           </p>
           <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
-            {detail.pipeline_stage_label && <span>Stage: {detail.pipeline_stage_label}</span>}
+            {detail.pipeline_stage_label && <span>{detail.pipeline_stage_label}</span>}
             {refreshing && <span>Updating…</span>}
             {lastUpdated && !refreshing && (
               <span>Updated {lastUpdated.toLocaleTimeString()}</span>
@@ -215,14 +215,14 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
           <>
             <ClaimPipelineStepper currentKey={detail.pipeline_stage_key} pulsing={inActivePipeline} />
             <p className="text-xs text-[var(--muted)]">
-              This page refreshes every few seconds while automated research runs.
+              This page refreshes every few seconds while the check runs.
             </p>
           </>
         )}
 
         {assessmentDone && !inActivePipeline && (
           <p className="text-xs text-[var(--muted)]">
-            AI assessment from our archive and linked sources — not human editorial sign-off.
+            AI read of our library plus any links you submitted — not a human editor signing off.
           </p>
         )}
 
@@ -244,7 +244,7 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
           <p className="text-sm text-[var(--muted)]">{totalEvidence} sources on record</p>
         </div>
         <p className="text-sm text-[var(--muted)]">
-          Sources matched from the archive and any URLs you submitted during enrichment.
+          Sources from the claim library and any URLs submitted with this claim.
         </p>
         <div className="space-y-8">
           <EvidenceList title="Supporting" items={detail.evidence_supporting} variant="prominent" />
@@ -254,7 +254,7 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
             <p className="text-sm text-[var(--muted)]">
               {inActivePipeline
                 ? "Gathering sources…"
-                : "No evidence artifacts on record yet."}
+                : "No sources matched yet."}
             </p>
           )}
         </div>
@@ -265,7 +265,7 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
       <section aria-labelledby="timeline-heading" className="space-y-4">
         <header>
           <h2 id="timeline-heading" className="owid-section-heading">
-            History timeline
+            History
           </h2>
         </header>
         <ClaimTimeline events={timeline?.events ?? []} />
@@ -291,7 +291,7 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
       <aside aria-labelledby="ai-panel-heading" className="owid-panel-ai space-y-4">
         <header>
           <h2 id="ai-panel-heading" className="owid-kicker">
-            AI-assisted analysis
+            AI write-up
           </h2>
           {detail.last_ai_run_at && (
             <p className="mt-1 text-xs text-[var(--muted)]">
@@ -302,7 +302,7 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
         </header>
         <AiAnalysisList items={detail.ai_analyses} />
         {detail.ai_analyses.length === 0 && inActivePipeline && (
-          <p className="text-xs text-[var(--muted)]">Structured analyses will appear when enrichment finishes.</p>
+          <p className="text-xs text-[var(--muted)]">Analysis will appear when the check finishes.</p>
         )}
         <ClaimStaffAiTools
           slug={slug}

@@ -175,7 +175,7 @@ export default function SubmitPage() {
         return;
       }
       setMsg(
-        `Submission received (${data.id}). Open your claim page from Browse once processing links a public slug.`,
+        `Submission received. Once processing finishes, find it on Browse.`,
       );
       setText("");
       setUrls("");
@@ -200,8 +200,8 @@ export default function SubmitPage() {
         <h1 className="owid-page-heading text-3xl">Submit a claim</h1>
       </header>
       <p className="owid-lead text-base">
-        Anyone can submit. Your claim goes live immediately; research and evidence enrich the page in the background.
-        Moderators refine claims over time rather than blocking publication.
+        Anyone can submit. Your claim goes live right away; we hunt sources and fill in scores in the background.
+        Staff can tidy wording later — nothing waits in a approval queue.
       </p>
       <p className="owid-card px-4 py-3 text-sm text-[var(--muted)]">
         <span className="font-medium text-[var(--fg)]">Signed in?</span> Submissions are linked to your account so you
@@ -244,7 +244,7 @@ export default function SubmitPage() {
             minLength={10}
             rows={6}
             className="owid-input w-full p-3 text-sm"
-            placeholder="State one clear empirical claim…"
+            placeholder="One clear claim — the kind you could argue with evidence…"
           />
           <textarea
             value={urls}
@@ -259,7 +259,7 @@ export default function SubmitPage() {
             className="owid-btn-primary disabled:opacity-60"
             disabled={!csrfReady || isSubmitting}
           >
-            {isSubmitting ? "Submitting..." : "Submit for enrichment"}
+            {isSubmitting ? "Submitting…" : "Submit claim"}
           </button>
           {isSubmitting && (
             <div className="space-y-2 rounded border border-[var(--border)] bg-[var(--bg-subtle)] p-3">

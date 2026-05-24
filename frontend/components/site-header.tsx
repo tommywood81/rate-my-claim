@@ -26,7 +26,7 @@ const NAV: NavItem[] = [
   },
   {
     href: "/atlas",
-    label: "Data model",
+    label: "Claim map",
     match: (p) => p === "/atlas" || p.startsWith("/atlas/"),
   },
   {

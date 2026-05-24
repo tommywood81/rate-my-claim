@@ -436,8 +436,7 @@ export function ClaimAtlasView() {
             className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 text-center text-sm"
             style={{ color: palette.hint }}
           >
-            No claims with embeddings yet. Submit claims and wait for enrichment — points will appear here as the
-            vector index grows.
+            No claims on the map yet. Submit one — dots appear as the library grows.
           </div>
         )}
         {focus && (
@@ -480,7 +479,7 @@ export function ClaimAtlasView() {
       {!isFullscreen && (
         <p className="text-xs text-[var(--muted)]">
           Drag to rotate · scroll to zoom · click a point to select. After 5s without input the view slowly spins.
-          Nearby points share similar meaning in embedding space, not necessarily the same verdict.
+          Nearby dots sound similar — they can still disagree on the verdict.
         </p>
       )}
     </div>
