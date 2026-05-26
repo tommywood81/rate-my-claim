@@ -198,17 +198,19 @@ class ClaimRepository(RepositoryBase):
         limit: int,
         min_similarity: float = 0.72,
         exclude_claim_id: UUID | None = None,
+        similar_claim_limit: int = 12,
+        max_similar_claims: int = 6,
     ) -> Sequence[Evidence]:
         """Retrieve evidence from semantically similar claims above a similarity floor."""
         similar = await self.vector_similar_claims(
-            embedding, limit=12, exclude_id=exclude_claim_id
+            embedding, limit=similar_claim_limit, exclude_id=exclude_claim_id
         )
         claim_ids: list[UUID] = []
         for claim, dist in similar:
             if (1.0 - float(dist)) < min_similarity:
                 continue
             claim_ids.append(claim.id)
-            if len(claim_ids) >= 6:
+            if len(claim_ids) >= max_similar_claims:
                 break
         if not claim_ids:
             return []

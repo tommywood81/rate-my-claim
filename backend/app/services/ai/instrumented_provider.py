@@ -157,3 +157,23 @@ class InstrumentedAIProvider(BaseAIProvider):
             lambda: self._inner.structured_verdict(claim, retrieved_context),
             cache_payload=cache.serialize_payload(claim, retrieved_context),
         )
+
+    async def generate_combined_assessment(
+        self,
+        claim: str,
+        evidence_context: str,
+        evidence_digest: str,
+    ) -> dict[str, Any]:
+        """Combined assessment when the inner provider implements it."""
+        inner_fn = getattr(self._inner, "generate_combined_assessment", None)
+        if inner_fn is None:
+            scores = await self.generate_confidence_analysis(claim, evidence_digest)
+            verdict = await self.structured_verdict(claim, evidence_context)
+            merged = dict(scores)
+            merged.update(verdict)
+            return merged
+        return await self._execute(
+            "generate_combined_assessment",
+            lambda: inner_fn(claim, evidence_context, evidence_digest),
+            cache_payload=cache.serialize_payload(claim, evidence_context, evidence_digest),
+        )

@@ -258,3 +258,28 @@ class OpenAIProvider(BaseAIProvider):
             f"CLAIM:\n{claim}\n\nCONTEXT:\n{retrieved_context[:16000]}",
             model=model,
         )
+
+    async def generate_combined_assessment(
+        self,
+        claim: str,
+        evidence_context: str,
+        evidence_digest: str,
+    ) -> dict[str, Any]:
+        """Single call: truth scores + verdict JSON (lower latency than two-step)."""
+        system = (
+            "Assess the CLAIM using only numbered lines in CONTEXT (full context) and DIGEST. "
+            "Output one JSON object with keys: "
+            "aggregate (0-1 assessment confidence), evidence_quality (0-1), "
+            "source_credibility (0-1), evidence_consistency (0-1), freshness (0-1), "
+            "controversy_hint (0-1), truth_label (supported|refuted|unclear), "
+            "rationale (string), verdict_summary (string), "
+            'citations ([{"context_line": int, "note": string}]), '
+            "confidence_hint (number), controversy_hint (number, may match controversy_hint above). "
+            "Do not invent sources. If no lines apply, empty citations and say so in verdict_summary."
+        )
+        model = model_for_operation(self._settings, "structured_verdict")
+        user = (
+            f"CLAIM:\n{claim}\n\nDIGEST:\n{evidence_digest[:12000]}\n\n"
+            f"CONTEXT:\n{evidence_context[:16000]}"
+        )
+        return await self._chat_json(system, user, model=model)

@@ -1,0 +1,50 @@
+# Enrichment pipeline tuning (non-secret). Override path via ENRICHMENT_PIPELINE_CONFIG.
+# Restart API/Celery after edits (config is loaded once per process).
+
+retrieval:
+  # Vector similarity floor for borrowing evidence from other claims (0–1).
+  min_similarity: 0.72
+  # Max similar claims considered before collecting evidence rows.
+  similar_claim_search_limit: 12
+  # Max neighbor claims whose evidence may be borrowed.
+  max_similar_claims: 6
+  # Max evidence rows attached to the assessment context.
+  evidence_line_limit: 10
+  # Max characters per evidence line excerpt in the model prompt.
+  excerpt_max_chars: 500
+  # Max total characters sent as verdict CONTEXT.
+  context_max_chars: 6000
+  # Max lines in the confidence digest (subset of context).
+  digest_line_limit: 10
+
+crawl:
+  # Max pending URL ingestion jobs processed per enrichment run.
+  max_url_jobs: 6
+  # Concurrent HTTP fetches (semaphore).
+  parallel_fetches: 4
+  # Per-URL timeout (seconds); slow URLs are skipped.
+  per_url_timeout_seconds: 8.0
+  # Wall-clock cap for all URL jobs in one run.
+  total_crawl_budget_seconds: 25.0
+  # HTTP client timeout passed to HtmlExtractor.
+  http_timeout_seconds: 10.0
+  # Truncate extracted HTML text before chunking/storage.
+  max_extracted_chars: 18000
+  # Verdict context excerpt from each artifact (not full cleaned_content).
+  artifact_excerpt_chars: 2500
+  # Embed full document vector on hot path (needed for artifact.embedding column).
+  embed_document_on_hot_path: true
+  # When true, skip per-chunk embedding during enrichment (chunks stored without vectors).
+  skip_chunk_embeddings_on_hot_path: true
+  # If skip_chunk_embeddings is false, cap how many chunks get embedded.
+  max_chunks_to_embed: 2
+
+ai:
+  # One reasoning call returns scores + verdict (OpenAI provider). Falls back to two calls if unsupported.
+  use_combined_assessment: true
+  # Skip separate summarize_evidence call; use verdict_summary (or rationale) as ai_summary.
+  skip_evidence_summary_call: true
+  # When no corpus lines, skip structured_verdict and use scores-only provisional verdict.
+  use_provisional_verdict_without_corpus: true
+  # Max chars passed into combined/summary prompts beyond context caps.
+  prompt_claim_max_chars: 8000

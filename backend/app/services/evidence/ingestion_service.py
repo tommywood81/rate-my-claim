@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from uuid import UUID
@@ -9,6 +10,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.core.enrichment_pipeline_config import CrawlStageConfig, get_enrichment_pipeline_config
 from app.models.evidence_artifact import EvidenceArtifact
 from app.models.ingestion import IngestionJob, IngestionJobStatus
 from app.repositories.evidence_artifact_repository import EvidenceArtifactRepository
@@ -31,12 +33,14 @@ class EvidenceIngestionService:
         *,
         settings: Settings | None = None,
         extractor: HtmlExtractor | None = None,
+        crawl: CrawlStageConfig | None = None,
     ) -> None:
         self._session = session
         self._settings = settings or get_settings()
+        self._crawl = crawl or get_enrichment_pipeline_config().crawl
         self._artifacts = EvidenceArtifactRepository(session)
         self._jobs = IngestionJobRepository(session)
-        self._extractor = extractor or HtmlExtractor()
+        self._extractor = extractor or HtmlExtractor(timeout=self._crawl.http_timeout_seconds)
 
     async def ingest_url(
         self,
@@ -57,26 +61,33 @@ class EvidenceIngestionService:
         if doc.error or not doc.text.strip():
             raise ValueError(doc.error or "empty_extraction")
 
-        digest = content_hash(url=normalized, text=doc.text)
+        text = doc.text[: self._crawl.max_extracted_chars]
+        digest = content_hash(url=normalized, text=text)
         by_hash = await self._artifacts.get_by_content_hash(digest)
         if by_hash:
             return by_hash
 
         ai = provider or get_ai_provider(budget_scope=budget_scope)
-        doc_vec, doc_model = await ai.generate_embedding(doc.text[:8000])
+        doc_vec: list[float] | None = None
+        doc_model: str | None = None
+        if self._crawl.embed_document_on_hot_path:
+            doc_vec, doc_model = await ai.generate_embedding(text[:8000])
+
         chunks = chunk_text(
-            doc.text,
+            text,
             chunk_size=self._settings.evidence_chunk_size,
             overlap=self._settings.evidence_chunk_overlap,
         )
         chunk_rows: list[tuple[int, str, list[float] | None, str | None, str | None]] = []
+        embed_cap = 0 if self._crawl.skip_chunk_embeddings_on_hot_path else self._crawl.max_chunks_to_embed
         for idx, piece in enumerate(chunks):
-            vec, emb_model = await ai.generate_embedding(piece[:8000])
-            chunk_rows.append(
-                (idx, piece, vec, emb_model, self._settings.embedding_version)
-            )
+            vec: list[float] | None = None
+            emb_model: str | None = None
+            if embed_cap > 0 and idx < embed_cap:
+                vec, emb_model = await ai.generate_embedding(piece[:8000])
+            chunk_rows.append((idx, piece, vec, emb_model, self._settings.embedding_version))
 
-        summary = doc.text[:500].strip() if doc.text else None
+        summary = text[:500].strip() if text else None
         artifact = await self._artifacts.create_artifact(
             url=normalized,
             content_hash=digest,
@@ -85,12 +96,12 @@ class EvidenceIngestionService:
             publisher=doc.publisher,
             authors=doc.authors,
             publication_date=doc.publication_date,
-            summary=summary,
-            cleaned_content=doc.text,
             citations=doc.citations,
             extraction_metadata=doc.extraction_metadata,
             retrieval_timestamp=doc.retrieval_timestamp,
             retrieval_source=retrieval_source or doc.retrieval_source,
+            summary=summary,
+            cleaned_content=text,
             embedding=doc_vec,
             embedding_model=doc_model,
             embedding_version=self._settings.embedding_version,
@@ -101,7 +112,12 @@ class EvidenceIngestionService:
         )
         logger.info(
             "evidence_artifact_ingested",
-            extra={"artifact_id": str(artifact.id), "url": normalized, "chunks": len(chunk_rows)},
+            extra={
+                "artifact_id": str(artifact.id),
+                "url": normalized,
+                "chunks": len(chunk_rows),
+                "chunk_embeddings": sum(1 for row in chunk_rows if row[2] is not None),
+            },
         )
         loaded = await self._artifacts.get_by_id(artifact.id)
         return loaded or artifact
@@ -111,7 +127,7 @@ class EvidenceIngestionService:
         job: IngestionJob,
         *,
         provider: BaseAIProvider | None = None,
-        budget_scope: str | "evidence_job",
+        budget_scope: str = "evidence_job",
     ) -> EvidenceArtifact | None:
         """Run a single ingestion job to completion."""
         await self._jobs.mark_running(job)
@@ -141,6 +157,28 @@ class EvidenceIngestionService:
             )
             return None
 
+    async def _process_job_bounded(
+        self,
+        job: IngestionJob,
+        *,
+        provider: BaseAIProvider | None,
+        budget_scope: str,
+        semaphore: asyncio.Semaphore,
+    ) -> EvidenceArtifact | None:
+        async with semaphore:
+            try:
+                return await asyncio.wait_for(
+                    self.process_job(job, provider=provider, budget_scope=budget_scope),
+                    timeout=self._crawl.per_url_timeout_seconds,
+                )
+            except TimeoutError:
+                await self._jobs.mark_failed(job, error="per_url_timeout")
+                logger.warning(
+                    "ingestion_job_timeout",
+                    extra={"job_id": str(job.id), "url": job.source_url[:200]},
+                )
+                return None
+
     async def process_pending_jobs(
         self,
         pending_id: UUID,
@@ -148,10 +186,11 @@ class EvidenceIngestionService:
         provider: BaseAIProvider | None = None,
         budget_scope: str = "pending",
     ) -> list[EvidenceArtifact]:
-        """Process all ingestion jobs for a pending claim."""
+        """Process pending URL jobs in parallel with crawl budget limits."""
         artifacts: list[EvidenceArtifact] = []
         jobs = await self._jobs.list_for_pending(pending_id)
-        for job in jobs:
+        runnable: list[IngestionJob] = []
+        for job in jobs[: self._crawl.max_url_jobs]:
             status = IngestionJobStatus(str(job.status))
             if status == IngestionJobStatus.succeeded and job.artifact_id:
                 loaded = await self._artifacts.get_by_id(job.artifact_id)
@@ -160,12 +199,41 @@ class EvidenceIngestionService:
                 continue
             if status in {IngestionJobStatus.failed, IngestionJobStatus.running}:
                 continue
-            result = await self.process_job(
-                job,
-                provider=provider,
-                budget_scope=f"{budget_scope}:{pending_id}",
+            runnable.append(job)
+
+        if not runnable:
+            return artifacts
+
+        sem = asyncio.Semaphore(self._crawl.parallel_fetches)
+        scope = f"{budget_scope}:{pending_id}"
+
+        async def _run_all() -> list[EvidenceArtifact | None]:
+            return await asyncio.gather(
+                *[
+                    self._process_job_bounded(
+                        job,
+                        provider=provider,
+                        budget_scope=scope,
+                        semaphore=sem,
+                    )
+                    for job in runnable
+                ]
             )
-            if result:
+
+        try:
+            results = await asyncio.wait_for(
+                _run_all(),
+                timeout=self._crawl.total_crawl_budget_seconds,
+            )
+        except TimeoutError:
+            logger.warning(
+                "crawl_budget_exceeded",
+                extra={"pending_id": str(pending_id), "jobs": len(runnable)},
+            )
+            results = []
+
+        for result in results:
+            if isinstance(result, EvidenceArtifact):
                 artifacts.append(result)
         return artifacts
 

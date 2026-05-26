@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY pyproject.toml README.md ./
+COPY config ./config
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
