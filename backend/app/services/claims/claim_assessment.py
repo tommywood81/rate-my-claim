@@ -37,17 +37,22 @@ def assessment_confidence_score(data: dict[str, Any]) -> float:
 
 
 def scores_from_pending_analyses(analyses: list) -> tuple[float, float, float]:
-    """Return (confidence, controversy, evidence_score) from enrichment analyses."""
+    """Return (confidence, controversy, evidence_score) from the latest enrichment analyses."""
+    from app.services.claims.assessment_provenance import latest_analyses_by_type
+
     confidence = 0.0
     controversy = 0.0
     evidence_score = 0.0
 
-    for row in analyses:
+    for row in latest_analyses_by_type(analyses):
         if row.analysis_type == "confidence_analysis" and row.structured_payload:
             data = _parse_json_payload(row.structured_payload)
-            confidence = assessment_confidence_score(data)
-            evidence_score = float(data.get("evidence_quality", evidence_score) or evidence_score)
-            hint = float(data.get("controversy_hint", 0.0) or 0.0)
+            scores_body = data.get("scores") if isinstance(data.get("scores"), dict) else data
+            confidence = assessment_confidence_score(scores_body)
+            evidence_score = float(
+                scores_body.get("evidence_quality", evidence_score) or evidence_score
+            )
+            hint = float(scores_body.get("controversy_hint", 0.0) or 0.0)
             if hint > controversy:
                 controversy = hint
 
@@ -96,18 +101,22 @@ def truth_label_from_analyses(
     }:
         return None
 
-    has_verdict = any(row.analysis_type == "structured_verdict" for row in analyses)
+    from app.services.claims.assessment_provenance import latest_analyses_by_type
+
+    latest = latest_analyses_by_type(analyses)
+    has_verdict = any(row.analysis_type == "structured_verdict" for row in latest)
     if not has_verdict:
         return None
 
     label: str | None = None
     aggregate = 0.0
 
-    for row in analyses:
+    for row in latest:
         if row.analysis_type == "confidence_analysis" and row.structured_payload:
             data = _parse_json_payload(row.structured_payload)
-            aggregate = float(data.get("aggregate", aggregate) or aggregate)
-            raw = str(data.get("truth_label", "")).strip().lower()
+            scores_body = data.get("scores") if isinstance(data.get("scores"), dict) else data
+            aggregate = float(scores_body.get("aggregate", aggregate) or aggregate)
+            raw = str(scores_body.get("truth_label", "")).strip().lower()
             if raw in _TRUTH_VALUES:
                 label = raw
 

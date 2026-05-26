@@ -70,7 +70,7 @@ def test_scores_from_pending_maps_evidence_quality_and_controversy() -> None:
         ),
     ]
     confidence, controversy, evidence = scores_from_pending_analyses(analyses)
-    assert confidence == 0.9
+    assert confidence == 0.82
     assert evidence == 0.55
     assert controversy == 0.12
 

@@ -19,6 +19,13 @@ PENDING_MODERATOR_ACTIONS: dict[ProcessingStatus, frozenset[ProcessingStatus]] =
             ProcessingStatus.submitted,
         }
     ),
+    # Auto-assessment finishes at completed; staff may still send back for edits.
+    ProcessingStatus.completed: frozenset(
+        {
+            ProcessingStatus.revision_requested,
+            ProcessingStatus.rejected,
+        }
+    ),
     ProcessingStatus.failed: frozenset({ProcessingStatus.submitted}),
 }
 

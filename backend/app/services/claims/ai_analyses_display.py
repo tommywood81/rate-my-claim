@@ -28,7 +28,6 @@ def _texts_match(a: str | None, b: str | None) -> bool:
         return False
     if na == nb:
         return True
-    # Treat long shared prefix as duplicate (model copy-paste between fields).
     shorter, longer = (na, nb) if len(na) <= len(nb) else (nb, na)
     if len(shorter) >= 80 and longer.startswith(shorter[: min(len(shorter), 200)]):
         return True
@@ -36,29 +35,31 @@ def _texts_match(a: str | None, b: str | None) -> bool:
 
 
 def dedupe_public_ai_analyses(analyses: list[AIAnalysisResponse]) -> list[AIAnalysisResponse]:
-    """Drop analyses whose narrative duplicates a higher-priority entry."""
-    by_type = {a.analysis_type: a for a in analyses}
-    verdict = by_type.get("structured_verdict")
-    verdict_text = verdict.generated_text if verdict else None
+    """
+    Drop redundant confidence text when it duplicates the latest verdict summary.
+
+    Preserves multiple structured_verdict rows (assessment history) when present.
+    Input should be newest-first.
+    """
+    if not analyses:
+        return []
+
+    latest_verdict = next(
+        (a for a in analyses if a.analysis_type == "structured_verdict"),
+        None,
+    )
+    verdict_text = latest_verdict.generated_text if latest_verdict else None
 
     kept: list[AIAnalysisResponse] = []
-    skipped_types: set[str] = set()
+    seen_confidence = False
 
-    for analysis_type in _PUBLIC_ANALYSIS_PRIORITY:
-        row = by_type.get(analysis_type)
-        if row is None:
-            continue
-        if analysis_type == "confidence_analysis" and verdict_text:
-            if _texts_match(row.generated_text, verdict_text):
-                skipped_types.add(analysis_type)
-                continue
-        kept.append(row)
-
-    seen = {a.analysis_type for a in kept} | skipped_types
     for row in analyses:
-        if row.analysis_type in seen:
-            continue
+        if row.analysis_type == "confidence_analysis":
+            if verdict_text and _texts_match(row.generated_text, verdict_text):
+                continue
+            if seen_confidence:
+                continue
+            seen_confidence = True
         kept.append(row)
-        seen.add(row.analysis_type)
 
-    return kept[:12]
+    return kept[:24]

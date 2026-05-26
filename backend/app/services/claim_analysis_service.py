@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from app.core.config import Settings
 from app.models.ai_analysis import AIAnalysis
 from app.models.claim import Claim
@@ -26,6 +28,13 @@ async def add_structured_verdict_for_claim(
     summary = str(verdict.get("verdict_summary") or "")
     conf_raw = verdict.get("confidence_hint")
     confidence = float(conf_raw) if conf_raw is not None else 0.5
+    evidence_ids = [str(ev.id) for ev in (claim.evidence_items or [])]
+    provenance = {
+        "assessment_run_at": datetime.now(tz=UTC).isoformat(),
+        "canonical_claim_text": claim.canonical_claim_text[:8000],
+        "evidence_ids": evidence_ids,
+        "created_by_job": "claim_detail_analysis",
+    }
     return await ai_repo.add_analysis(
         target_type="claim",
         target_id=claim.id,
@@ -33,7 +42,7 @@ async def add_structured_verdict_for_claim(
         provider=provider.name,
         analysis_type="structured_verdict",
         generated_text=summary,
-        structured_payload={"verdict": verdict},
+        structured_payload={"verdict": verdict, "provenance": provenance},
         confidence=confidence,
         created_by_job="claim_detail_analysis",
     )

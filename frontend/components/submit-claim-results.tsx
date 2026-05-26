@@ -143,7 +143,10 @@ export function SubmitClaimResultsPanel({ slug, detail, elapsedSec, inFlight }: 
     >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="owid-kicker">{complete ? "Assessment complete" : "Live assessment"}</p>
+          <p className="owid-kicker">
+            {complete ? "Assessment complete" : "Live assessment"}
+            {complete ? " · AI assessment" : ""}
+          </p>
           <h2 className="owid-section-heading mt-1 text-xl sm:text-2xl">Your results</h2>
         </div>
         {complete && (

@@ -222,8 +222,18 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
 
         {assessmentDone && !inActivePipeline && (
           <p className="text-xs text-[var(--muted)]">
-            Automated assessment from the claim library and submitted links — not human editorial sign-off. Truth
-            status can be updated, disputed, or overturned as evidence shifts.
+            {detail.staff_reviewed || detail.moderation_reviewed ? (
+              <>
+                <span className="font-medium text-[var(--fg)]">Staff-reviewed</span> — a moderator or admin has
+                taken action on this record. Truth status can still change as new evidence arrives.
+              </>
+            ) : (
+              <>
+                <span className="font-medium text-[var(--fg)]">AI assessment</span> — automated from the claim library
+                and submitted links, not human editorial sign-off for every claim. Truth status can be updated,
+                disputed, or overturned as evidence shifts.
+              </>
+            )}
           </p>
         )}
 

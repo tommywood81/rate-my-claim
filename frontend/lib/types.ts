@@ -67,6 +67,9 @@ export type ClaimDetail = {
   live_ai_summary?: string | null;
   visibility_label?: string | null;
   assessment_complete?: boolean;
+  /** True when staff (moderator/admin) took an explicit action — not required for every claim. */
+  staff_reviewed?: boolean;
+  /** @deprecated Use staff_reviewed — kept for API compatibility. */
   moderation_reviewed?: boolean;
   truth_label?: "supported" | "refuted" | "unclear" | null;
   last_ai_run_at?: string | null;

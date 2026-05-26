@@ -117,8 +117,9 @@ class ClaimDetailResponse(BaseModel):
     pipeline_stage_label: str | None = None
     live_ai_summary: str | None = None
     visibility_label: str | None = None
-    moderation_reviewed: bool = False
     assessment_complete: bool = False
+    staff_reviewed: bool = False
+    moderation_reviewed: bool = False
     truth_label: str | None = None
     last_ai_run_at: datetime | None = None
     generate_ai_analysis_available: bool = False

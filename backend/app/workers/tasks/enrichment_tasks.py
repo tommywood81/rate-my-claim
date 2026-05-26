@@ -21,6 +21,7 @@ from app.services.ingestion.claim_normalization import normalize_claim_text
 from app.services.ingestion.duplicate_detection_service import DuplicateDetectionService
 from app.services.ingestion.pipeline_audit import IngestionPipelineAudit
 from app.services.claims.assessment_finalize import finalize_pending_assessment
+from app.services.claims.assessment_provenance import build_enrichment_provenance
 from app.services.claims.live_claim_sync import sync_pending_to_linked_claim
 from app.services.evidence.ingestion_service import EvidenceIngestionService
 
@@ -199,6 +200,26 @@ async def _run_pipeline(pending_id: UUID) -> None:
             has_corpus_evidence = bool(lines)
             context = "\n".join(lines) if lines else "(no corpus evidence retrieved)"
             digest = "\n".join(lines[:20]) if lines else _EMPTY_DIGEST_PROMPT
+            run_at = datetime.now(tz=UTC)
+            provenance = build_enrichment_provenance(
+                pending=pending,
+                canonical_claim_text=canonical,
+                line_map=line_map,
+                embedding_model=emb_model,
+                embedding_version=settings.embedding_version,
+                has_corpus_evidence=has_corpus_evidence,
+                url_artifact_ids=[
+                    str(b.get("artifact_id"))
+                    for b in url_blocks
+                    if b.get("artifact_id")
+                ],
+                borrowed_evidence_ids=[
+                    str(line_map[k].get("evidence_id"))
+                    for k in sorted(line_map)
+                    if line_map[k].get("kind") == "db_evidence" and line_map[k].get("evidence_id")
+                ],
+                assessment_run_at=run_at,
+            )
 
             scores = await provider.generate_confidence_analysis(canonical, digest)
             await ai_repo.add_analysis(
@@ -208,7 +229,7 @@ async def _run_pipeline(pending_id: UUID) -> None:
                 provider=provider.name,
                 analysis_type="confidence_analysis",
                 generated_text=str(scores.get("rationale", "")),
-                structured_payload=scores,
+                structured_payload={"scores": scores, "provenance": provenance},
                 confidence=float(scores.get("aggregate", 0.5) or 0.5),
                 created_by_job="enrichment",
             )
@@ -224,7 +245,11 @@ async def _run_pipeline(pending_id: UUID) -> None:
                 provider=provider.name,
                 analysis_type="structured_verdict",
                 generated_text=str(verdict.get("verdict_summary", "")),
-                structured_payload={"verdict": verdict, "line_map": line_map},
+                structured_payload={
+                    "verdict": verdict,
+                    "line_map": line_map,
+                    "provenance": provenance,
+                },
                 confidence=float(verdict.get("confidence_hint", 0.5) or 0.5),
                 created_by_job="enrichment",
             )

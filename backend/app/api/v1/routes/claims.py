@@ -39,6 +39,7 @@ from app.services.claims.claim_ai_moderation import (
     on_demand_analysis_block_reason,
 )
 from app.services.claims.ai_analyses_display import dedupe_public_ai_analyses
+from app.services.claims.assessment_provenance import filter_evidence_for_public_display
 from app.services.claims.claim_live_context import build_claim_live_context, merge_ai_analyses
 from app.services.claims.live_claim_sync import ensure_live_claim_for_pending, get_pending_for_claim
 from app.services.claims.pipeline_labels import visibility_label
@@ -250,7 +251,7 @@ async def claim_detail(
 
     sup, con, ctx = [], [], []
 
-    for ev in claim.evidence_items:
+    for ev in filter_evidence_for_public_display(claim.evidence_items):
         item = EvidenceResponse.model_validate(ev)
         if ev.stance == EvidenceStance.supports:
             sup.append(item)
@@ -259,17 +260,8 @@ async def claim_detail(
         else:
             ctx.append(item)
 
-    analyses = await ai_repo.list_for_target("claim", claim.id)
-    seen_types: set[str] = set()
-    deduped: list = []
-    for row in analyses:
-        if row.analysis_type in seen_types:
-            continue
-        seen_types.add(row.analysis_type)
-        deduped.append(row)
-        if len(deduped) >= 12:
-            break
-    ai_out = [AIAnalysisResponse.model_validate(a) for a in deduped]
+    claim_analyses = await ai_repo.list_for_target("claim", claim.id)
+    ai_out = [AIAnalysisResponse.model_validate(a) for a in claim_analyses[:24]]
 
     pending = await get_pending_for_claim(db, claim.id)
     live = await build_claim_live_context(db, claim=claim, pending=pending)
@@ -320,8 +312,9 @@ async def claim_detail(
         pipeline_stage_label=live.pipeline_stage_label,
         live_ai_summary=live.live_ai_summary,
         visibility_label=live.visibility_label,
-        moderation_reviewed=live.assessment_complete,
         assessment_complete=live.assessment_complete,
+        staff_reviewed=live.staff_reviewed,
+        moderation_reviewed=live.staff_reviewed,
         truth_label=live.truth_label,
         last_ai_run_at=last_ai_run_at,
         generate_ai_analysis_available=can_generate,

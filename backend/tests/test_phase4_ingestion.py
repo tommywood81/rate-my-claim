@@ -45,6 +45,9 @@ def test_pending_transition_rules() -> None:
     assert_pending_transition(
         ProcessingStatus.awaiting_moderation, ProcessingStatus.revision_requested
     )
+    assert_pending_transition(
+        ProcessingStatus.completed, ProcessingStatus.revision_requested
+    )
     assert_pending_transition(ProcessingStatus.failed, ProcessingStatus.submitted)
     with pytest.raises(ValueError):
         assert_pending_transition(ProcessingStatus.submitted, ProcessingStatus.completed)
@@ -152,10 +155,6 @@ async def test_moderation_revision_and_claim_lifecycle(
     )
     monkeypatch.setattr(
         "app.workers.tasks.enrichment_tasks.get_ai_provider",
-        lambda **kwargs: stub,
-    )
-    monkeypatch.setattr(
-        "app.services.moderation.moderation_service.get_ai_provider",
         lambda **kwargs: stub,
     )
     monkeypatch.setattr(
