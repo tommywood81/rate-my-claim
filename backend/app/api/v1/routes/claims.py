@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -18,6 +19,7 @@ from app.models.claim import ProcessingStatus
 from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.repositories.claims_repository import ClaimRepository
 from app.services.ingestion.claim_normalization import normalize_claim_text
+from app.services.ingestion.duplicate_detection_service import DuplicateDetectionService
 from app.services.ingestion.pipeline_audit import IngestionPipelineAudit
 from app.schemas.claims import (
     AIAnalysisResponse,
@@ -29,7 +31,7 @@ from app.schemas.claims import (
     ResubmitPendingRequest,
     VoteRequest,
 )
-from app.schemas.common import CursorMeta, SuccessEnvelope
+from app.schemas.common import CursorMeta, ErrorDetail, ErrorEnvelope, SuccessEnvelope
 from app.services.ai.factory import get_ai_provider
 from app.services.claim_analysis_service import add_structured_verdict_for_claim
 from app.services.claims.claim_ai_moderation import (
@@ -72,16 +74,69 @@ async def submit_claim(
     body: CreateClaimRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User | None, Depends(get_optional_current_user)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
 ) -> SuccessEnvelope[PendingClaimResponse]:
     """Queue a new claim for async enrichment (guests and signed-in users)."""
     repo = ClaimRepository(db)
     normalized = normalize_claim_text(body.raw_claim_text)
+    dup_svc = DuplicateDetectionService(db, settings)
+
+    exact = await dup_svc.find_exact_normalized_duplicate(normalized)
+    if exact is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=ErrorEnvelope(
+                error=ErrorDetail(
+                    code="duplicate_claim",
+                    message=(
+                        "This claim matches an existing record word-for-word. "
+                        f"Open /claims/{exact.public_slug} instead of submitting again."
+                    ),
+                    details={
+                        "similar_slug": exact.public_slug,
+                        "similar_title": exact.title,
+                        "similarity": 1.0,
+                        "match_kind": exact.match_kind,
+                        "match_method": exact.match_method,
+                    },
+                )
+            ).model_dump(),
+        )
+
+    provider = get_ai_provider(budget_scope="submit:precheck")
+    vec, emb_model = await provider.generate_embedding(normalized)
+    dup = await dup_svc.find_semantic_blocking_duplicate(vec)
+    if dup is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=ErrorEnvelope(
+                error=ErrorDetail(
+                    code="duplicate_claim",
+                    message=(
+                        "This claim is very similar to one already in the library. "
+                        f"Open /claims/{dup.public_slug} instead of submitting again."
+                    ),
+                    details={
+                        "similar_slug": dup.public_slug,
+                        "similar_title": dup.title,
+                        "similarity": round(dup.similarity, 4),
+                        "match_kind": dup.match_kind,
+                        "match_method": dup.match_method,
+                    },
+                )
+            ).model_dump(),
+        )
+
     pending = await repo.create_pending(
         raw_text=normalized,
         user_id=user.id if user else None,
         source_urls=[],
     )
     pending.normalized_claim_text = normalized
+    pending.embedding = vec
+    pending.embedding_model = emb_model
+    pending.embedding_version = settings.embedding_version
+    pending.embedding_at = datetime.now(tz=UTC)
     await IngestionPipelineAudit(db).log_submitted(
         pending_id=pending.id,
         actor_id=user.id if user else None,

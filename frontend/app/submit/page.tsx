@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { SubmitPipelineProgress } from "@/components/submit-pipeline-progress";
-import { apiFetch } from "@/lib/api";
+import { ApiRequestError, apiFetch } from "@/lib/api";
 import {
   PIPELINE_TERMINAL,
   submitStatusMessage,
@@ -31,6 +31,19 @@ type TrackingState = {
   errorMessage: string | null;
 };
 
+type DuplicateRedirect = {
+  slug: string;
+  title: string;
+  similarity?: number;
+  matchMethod?: string;
+};
+
+function claimPathFromMessage(message: string): string | null {
+  const match = message.match(/\/claims\/([^\s]+)/);
+  if (!match) return null;
+  return `/claims/${match[1]}`;
+}
+
 export default function SubmitPage() {
   const [text, setText] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -43,6 +56,8 @@ export default function SubmitPage() {
   const [tracking, setTracking] = useState<TrackingState | null>(null);
   const [claimDetail, setClaimDetail] = useState<ClaimDetail | null>(null);
   const [indexedClaims, setIndexedClaims] = useState<number | undefined>(undefined);
+  const [duplicateMatch, setDuplicateMatch] = useState<DuplicateRedirect | null>(null);
+  const [duplicateLink, setDuplicateLink] = useState<string | null>(null);
   const trackStartedAt = useRef<number | null>(null);
 
   useEffect(() => {
@@ -138,6 +153,8 @@ export default function SubmitPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
+    setDuplicateMatch(null);
+    setDuplicateLink(null);
     setTracking(null);
     setClaimDetail(null);
     if (!csrfReady) {
@@ -182,7 +199,26 @@ export default function SubmitPage() {
       );
       setText("");
     } catch (err: unknown) {
-      setMsg(err instanceof Error ? err.message : "Failed");
+      if (err instanceof ApiRequestError && err.code === "duplicate_claim") {
+        const slug = String(err.details?.similar_slug ?? "");
+        const title = String(err.details?.similar_title ?? "an existing claim");
+        if (slug) {
+          setDuplicateLink(`/claims/${encodeURIComponent(slug)}`);
+          setDuplicateMatch({
+            slug,
+            title,
+            similarity:
+              typeof err.details?.similarity === "number" ? err.details.similarity : undefined,
+            matchMethod:
+              typeof err.details?.match_method === "string" ? err.details.match_method : undefined,
+          });
+          return;
+        }
+      }
+      const message = err instanceof Error ? err.message : "Failed";
+      const derived = claimPathFromMessage(message);
+      if (derived) setDuplicateLink(derived);
+      setMsg(message);
     } finally {
       setIsSubmitting(false);
       if (!startedTracking) {
@@ -236,7 +272,46 @@ export default function SubmitPage() {
         />
       )}
 
-      {!tracking && (
+      {duplicateMatch && (
+        <div
+          className="owid-card space-y-4 border-l-4 border-l-amber-600 px-4 py-4"
+          role="alert"
+        >
+          <p className="font-semibold text-[var(--fg)]">This claim is already in the library</p>
+          <p className="text-sm text-[var(--muted)]">
+            {duplicateMatch.matchMethod === "exact"
+              ? "Your wording matches an existing record exactly (after normalization). "
+              : "Your wording closely matches an existing record "}
+            {duplicateMatch.matchMethod !== "exact" && duplicateMatch.similarity != null
+              ? `(${Math.round(duplicateMatch.similarity * 100)}% similar). `
+              : duplicateMatch.matchMethod === "exact"
+                ? ""
+                : ""}
+            We did not start a new assessment — open the existing page instead.
+          </p>
+          <p className="text-sm text-[var(--fg)]">&ldquo;{duplicateMatch.title}&rdquo;</p>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href={`/claims/${encodeURIComponent(duplicateMatch.slug)}`}
+              className="owid-btn-primary"
+            >
+              View existing claim
+            </Link>
+            <Link href="/claims" className="owid-btn-secondary">
+              Browse all claims
+            </Link>
+            <button
+              type="button"
+              className="text-sm text-[var(--accent)] hover:underline"
+              onClick={() => setDuplicateMatch(null)}
+            >
+              Try different wording
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!tracking && !duplicateMatch && (
         <form onSubmit={onSubmit} className="space-y-4">
           <textarea
             value={text}
@@ -291,6 +366,8 @@ export default function SubmitPage() {
             onClick={() => {
               setTracking(null);
               setClaimDetail(null);
+              setDuplicateMatch(null);
+              setDuplicateLink(null);
               setText("");
             }}
           >
@@ -299,7 +376,16 @@ export default function SubmitPage() {
         </p>
       )}
 
-      {msg && <p className="text-sm text-[var(--muted)]">{msg}</p>}
+      {msg && (
+        <p className="text-sm text-[var(--muted)]">
+          {msg}{" "}
+          {duplicateLink && (
+            <Link href={duplicateLink} className="text-[var(--accent)] hover:underline">
+              View existing claim
+            </Link>
+          )}
+        </p>
+      )}
     </div>
   );
 }

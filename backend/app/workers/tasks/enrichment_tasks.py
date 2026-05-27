@@ -176,15 +176,15 @@ async def _run_pipeline(pending_id: UUID) -> None:
 
             await audit.log_stage(pending_id=pending_id, stage="embedding")
 
-            vec, emb_model = await provider.generate_embedding(pending.raw_claim_text)
-
-            pending.embedding = vec
-
-            pending.embedding_model = emb_model
-
-            pending.embedding_version = settings.embedding_version
-
-            pending.embedding_at = datetime.now(tz=UTC)
+            if pending.embedding is not None:
+                vec = list(pending.embedding)
+                emb_model = pending.embedding_model
+            else:
+                vec, emb_model = await provider.generate_embedding(pending.raw_claim_text)
+                pending.embedding = vec
+                pending.embedding_model = emb_model
+                pending.embedding_version = settings.embedding_version
+                pending.embedding_at = datetime.now(tz=UTC)
 
             pending.processing_status = ProcessingStatus.duplicate_check
 

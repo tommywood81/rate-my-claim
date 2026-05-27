@@ -1,4 +1,18 @@
-import { messageFromApiBody } from "./api-errors";
+import { messageFromApiBody, parseApiError, type ParsedApiError } from "./api-errors";
+
+export class ApiRequestError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly details?: Record<string, unknown>;
+
+  constructor(status: number, parsed: ParsedApiError) {
+    super(parsed.message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.code = parsed.code;
+    this.details = parsed.details;
+  }
+}
 
 const API_BASE = "";
 
@@ -30,11 +44,11 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     body = {};
   }
   if (!res.ok) {
-    throw new Error(messageFromApiBody(body, res.statusText));
+    throw new ApiRequestError(res.status, parseApiError(body, res.statusText));
   }
   const rec = body as Record<string, unknown>;
   if (rec.success === false) {
-    throw new Error(messageFromApiBody(body, "Request failed"));
+    throw new ApiRequestError(400, parseApiError(body, "Request failed"));
   }
   return rec.data as T;
 }

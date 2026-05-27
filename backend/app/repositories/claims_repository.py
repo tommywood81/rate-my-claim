@@ -30,6 +30,31 @@ class ClaimRepository(RepositoryBase):
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def find_claim_by_normalized_submission_text(self, normalized: str) -> Claim | None:
+        """Exact match on normalized submission text (case-insensitive)."""
+        fold = normalized.casefold()
+        stmt = (
+            select(Claim)
+            .where(Claim.deleted_at.is_(None))
+            .where(func.lower(Claim.normalized_claim_text) == fold)
+            .limit(1)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def find_pending_by_normalized_submission_text(
+        self, normalized: str
+    ) -> PendingClaim | None:
+        """Pending row with the same normalized submission text, if any."""
+        fold = normalized.casefold()
+        stmt = (
+            select(PendingClaim)
+            .where(PendingClaim.normalized_claim_text.is_not(None))
+            .where(func.lower(PendingClaim.normalized_claim_text) == fold)
+            .order_by(PendingClaim.created_at.desc())
+            .limit(1)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def list_claims_cursor(
         self,
         *,

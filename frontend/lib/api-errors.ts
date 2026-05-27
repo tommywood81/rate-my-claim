@@ -1,23 +1,46 @@
 /** Normalize error messages from API JSON (envelope or FastAPI detail). */
 
-export function messageFromApiBody(body: unknown, fallback: string): string {
-  if (!body || typeof body !== "object") {
-    return fallback;
-  }
-  const b = body as Record<string, unknown>;
+export type ParsedApiError = {
+  message: string;
+  code?: string;
+  details?: Record<string, unknown>;
+};
+
+function envelopeFromRecord(b: Record<string, unknown>): ParsedApiError | null {
   const err = b.error;
   if (err && typeof err === "object" && "message" in err) {
-    return String((err as { message: unknown }).message);
+    const e = err as { message: unknown; code?: string; details?: Record<string, unknown> };
+    return {
+      message: String(e.message),
+      code: e.code,
+      details: e.details,
+    };
+  }
+  return null;
+}
+
+export function parseApiError(body: unknown, fallback: string): ParsedApiError {
+  if (!body || typeof body !== "object") {
+    return { message: fallback };
+  }
+  const b = body as Record<string, unknown>;
+  const top = envelopeFromRecord(b);
+  if (top) {
+    return top;
   }
   const detail = b.detail;
-  if (detail && typeof detail === "object" && "error" in detail) {
-    const inner = (detail as { error?: { message?: string } }).error;
-    if (inner?.message) {
-      return inner.message;
+  if (detail && typeof detail === "object") {
+    const inner = envelopeFromRecord(detail as Record<string, unknown>);
+    if (inner) {
+      return inner;
     }
   }
   if (typeof detail === "string") {
-    return detail;
+    return { message: detail };
   }
-  return fallback;
+  return { message: fallback };
+}
+
+export function messageFromApiBody(body: unknown, fallback: string): string {
+  return parseApiError(body, fallback).message;
 }
