@@ -289,13 +289,22 @@ export default function SubmitPage() {
                 : ""}
             We did not start a new assessment — open the existing page instead.
           </p>
-          <p className="text-sm text-[var(--fg)]">&ldquo;{duplicateMatch.title}&rdquo;</p>
+          <p className="text-sm text-[var(--fg)]">
+            &ldquo;
+            <Link
+              href={`/claims/${encodeURIComponent(duplicateMatch.slug)}`}
+              className="text-[var(--accent)] hover:underline"
+            >
+              {duplicateMatch.title}
+            </Link>
+            &rdquo;
+          </p>
           <div className="flex flex-wrap gap-3">
             <Link
               href={`/claims/${encodeURIComponent(duplicateMatch.slug)}`}
               className="owid-btn-primary"
             >
-              View existing claim
+              Open existing claim
             </Link>
             <Link href="/claims" className="owid-btn-secondary">
               Browse all claims
@@ -378,11 +387,20 @@ export default function SubmitPage() {
 
       {msg && (
         <p className="text-sm text-[var(--muted)]">
-          {msg}{" "}
-          {duplicateLink && (
-            <Link href={duplicateLink} className="text-[var(--accent)] hover:underline">
-              View existing claim
-            </Link>
+          {duplicateLink ? (
+            <>
+              {msg.split(/(\/claims\/[^\s]+)/).map((part, i) =>
+                part.startsWith("/claims/") ? (
+                  <Link key={i} href={part} className="text-[var(--accent)] hover:underline">
+                    {part}
+                  </Link>
+                ) : (
+                  <span key={i}>{part}</span>
+                ),
+              )}
+            </>
+          ) : (
+            msg
           )}
         </p>
       )}

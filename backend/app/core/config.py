@@ -153,7 +153,22 @@ class Settings(BaseSettings):
     search_cache_ttl_seconds: int = Field(default=300, ge=30, alias="SEARCH_CACHE_TTL_SECONDS")
     search_max_candidates: int = Field(default=120, ge=20, le=500, alias="SEARCH_MAX_CANDIDATES")
 
-    duplicate_vector_threshold: float = Field(default=0.92, ge=0.0, le=1.0)
+    duplicate_vector_threshold: float = Field(
+        default=0.92,
+        ge=0.0,
+        le=1.0,
+        description="Similarity floor for enrichment duplicate hints (non-blocking).",
+    )
+    duplicate_submit_block_threshold: float = Field(
+        default=0.88,
+        ge=0.0,
+        le=1.0,
+        alias="DUPLICATE_SUBMIT_BLOCK_THRESHOLD",
+        description=(
+            "Hard block at submit: semantic similarity at or above this value rejects "
+            "the submission (no new live claim, no enrichment). Lower = catch more paraphrases."
+        ),
+    )
     enrichment_retrieval_min_similarity: float = Field(
         default=0.72,
         ge=0.0,

@@ -105,7 +105,10 @@ async def submit_claim(
 
     provider = get_ai_provider(budget_scope="submit:precheck")
     vec, emb_model = await provider.generate_embedding(normalized)
-    dup = await dup_svc.find_semantic_blocking_duplicate(vec)
+    dup = await dup_svc.find_semantic_blocking_duplicate(
+        vec,
+        threshold=settings.duplicate_submit_block_threshold,
+    )
     if dup is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

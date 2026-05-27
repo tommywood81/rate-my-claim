@@ -70,11 +70,19 @@ class DuplicateDetectionService:
         *,
         exclude_claim_id: UUID | None = None,
         exclude_pending_id: UUID | None = None,
+        threshold: float | None = None,
     ) -> DuplicateMatch | None:
         """
-        Return the best vector match at or above duplicate_vector_threshold, if any.
+        Return the best vector match at or above threshold, if any.
+
+        Submit uses duplicate_submit_block_threshold (hard block). Enrichment hints use
+        duplicate_vector_threshold unless overridden.
         """
-        threshold = self._settings.duplicate_vector_threshold
+        threshold = (
+            threshold
+            if threshold is not None
+            else self._settings.duplicate_submit_block_threshold
+        )
         best: DuplicateMatch | None = None
 
         for claim, dist in await self._claims.vector_similar_claims(
@@ -124,11 +132,12 @@ class DuplicateDetectionService:
         exclude_claim_id: UUID | None = None,
         exclude_pending_id: UUID | None = None,
     ) -> DuplicateMatch | None:
-        """Semantic duplicate check (used in enrichment pipeline)."""
+        """Semantic duplicate check (enrichment pipeline; uses duplicate_vector_threshold)."""
         return await self.find_semantic_blocking_duplicate(
             embedding,
             exclude_claim_id=exclude_claim_id,
             exclude_pending_id=exclude_pending_id,
+            threshold=self._settings.duplicate_vector_threshold,
         )
 
     async def _resolve_pending_match(

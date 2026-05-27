@@ -62,7 +62,7 @@ async def test_find_semantic_blocking_duplicate_prefers_highest_similarity_claim
         return_value=[(claim_a, 0.05), (claim_b, 0.20)]
     )
     svc._claims.vector_similar_pending = AsyncMock(return_value=[])
-    svc._settings.duplicate_vector_threshold = 0.92
+    svc._settings.duplicate_submit_block_threshold = 0.88
 
     match = await svc.find_semantic_blocking_duplicate([0.1] * 8)
     assert match is not None
@@ -82,9 +82,31 @@ async def test_find_semantic_blocking_duplicate_returns_none_below_threshold() -
     svc._claims = MagicMock()
     svc._claims.vector_similar_claims = AsyncMock(return_value=[(claim, 0.5)])
     svc._claims.vector_similar_pending = AsyncMock(return_value=[])
-    svc._settings.duplicate_vector_threshold = 0.92
+    svc._settings.duplicate_submit_block_threshold = 0.88
 
     assert await svc.find_semantic_blocking_duplicate([0.1] * 8) is None
+
+
+@pytest.mark.asyncio
+async def test_submit_block_threshold_stricter_than_enrichment_hints() -> None:
+    """Submit hard-block default (0.88) catches paraphrases enrichment only hints at (0.92)."""
+    session = MagicMock()
+    svc = DuplicateDetectionService(session)
+    claim = MagicMock()
+    claim.id = uuid4()
+    claim.public_slug = "vitamin-d-flu"
+    claim.canonical_claim_text = "Vitamin D supplementation reduces seasonal flu risk in adults."
+    svc._claims = MagicMock()
+    svc._claims.vector_similar_claims = AsyncMock(return_value=[(claim, 0.10)])  # sim 0.90
+    svc._claims.vector_similar_pending = AsyncMock(return_value=[])
+    svc._settings.duplicate_submit_block_threshold = 0.88
+    svc._settings.duplicate_vector_threshold = 0.92
+
+    blocked = await svc.find_semantic_blocking_duplicate([0.1] * 8)
+    assert blocked is not None
+
+    hinted = await svc.find_blocking_duplicate([0.1] * 8)
+    assert hinted is None
 
 
 def test_duplicate_match_dataclass_fields() -> None:
