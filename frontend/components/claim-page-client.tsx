@@ -229,9 +229,9 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
               </>
             ) : (
               <>
-                <span className="font-medium text-[var(--fg)]">AI assessment</span> — automated from the claim library
-                and submitted links, not human editorial sign-off for every claim. Truth status can be updated,
-                disputed, or overturned as evidence shifts.
+                <span className="font-medium text-[var(--fg)]">AI assessment</span> — automated from the claim library,
+                not human editorial sign-off for every claim. Truth status can be updated, disputed, or overturned as
+                evidence is added to the record.
               </>
             )}
           </p>
@@ -255,7 +255,8 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
           <p className="text-sm text-[var(--muted)]">{totalEvidence} sources on record</p>
         </div>
         <p className="text-sm text-[var(--muted)]">
-          Sources, counterpoints, and contextual material from the library and any URLs submitted with this claim.
+          Sources, counterpoints, and contextual material drawn from the claim library (similar claims and archived
+          evidence).
         </p>
         <div className="space-y-8">
           <EvidenceList title="Supporting" items={detail.evidence_supporting} variant="prominent" />

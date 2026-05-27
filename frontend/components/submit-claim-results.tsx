@@ -268,7 +268,7 @@ export function SubmitClaimResultsPanel({ slug, detail, elapsedSec, inFlight }: 
           )
         ) : (
           <p className="text-sm text-[var(--muted)]">
-            {inFlight ? "Gathering sources from the library and your links…" : "No sources matched yet."}
+            {inFlight ? "Searching the claim library for sources…" : "No library sources matched yet."}
           </p>
         )}
       </div>

@@ -45,7 +45,8 @@ export function ClaimTruthBanner({ label }: Props) {
     >
       <p className="font-semibold">Truth status: inconclusive</p>
       <p className="mt-1 text-[var(--muted)]">
-        Not enough sources on record yet for a clear call. The assessment may update as the library grows.
+        No matching sources in the claim library yet — we will not call this supported or refuted until evidence is on
+        record. The research summary may still reflect general knowledge; status can change as sources are added.
       </p>
     </div>
   );

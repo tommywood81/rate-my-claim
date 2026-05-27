@@ -172,8 +172,8 @@ class ClaimTimelineService:
                     id=f"freshness-review-{claim.id}",
                     event_type="freshness_decay",
                     timestamp=claim.last_reviewed_at,
-                    title="Review completed",
-                    description="Moderator review may adjust freshness weighting.",
+                    title="Assessment published",
+                    description="Automated assessment finished; freshness scoring may update as sources age.",
                     payload={"freshness_score": claim.freshness_score},
                 )
             )

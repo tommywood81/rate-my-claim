@@ -72,8 +72,8 @@ export function ClaimLiveStatus({ slug, initial }: Props) {
       )}
       {assessed && (
         <p className="text-xs text-[var(--muted)]">
-          From the claim library and submitted links — not human editorial sign-off. Records can be updated,
-          disputed, or overturned as new sources appear.
+          From the claim library — not human editorial sign-off. Records can be updated, disputed, or overturned as new
+          sources are added to the library.
         </p>
       )}
       {detail.live_ai_summary && (

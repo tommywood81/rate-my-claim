@@ -70,6 +70,23 @@ def scores_from_pending_analyses(analyses: list) -> tuple[float, float, float]:
     return confidence, controversy, evidence_score
 
 
+def has_corpus_evidence_from_analyses(analyses: list) -> bool:
+    """True when enrichment attached library/URL lines to the assessment context."""
+    from app.services.claims.assessment_provenance import (
+        latest_analyses_by_type,
+        parse_structured_payload,
+    )
+
+    for row in latest_analyses_by_type(analyses):
+        if row.analysis_type not in {"confidence_analysis", "structured_verdict"}:
+            continue
+        data = parse_structured_payload(row.structured_payload)
+        prov = data.get("provenance")
+        if isinstance(prov, dict) and prov.get("has_corpus_evidence") is True:
+            return True
+    return False
+
+
 def resolve_public_claim_scores(
     claim: object,
     *,
@@ -92,6 +109,7 @@ def truth_label_from_analyses(
     analyses: list,
     *,
     processing_status: str | None,
+    evidence_count: int | None = None,
 ) -> TruthLabel | None:
     """Truth banner label once automated enrichment has produced a verdict."""
     if processing_status not in {
@@ -120,10 +138,18 @@ def truth_label_from_analyses(
             if raw in _TRUTH_VALUES:
                 label = raw
 
+    has_corpus = has_corpus_evidence_from_analyses(analyses)
+    if not has_corpus and evidence_count is not None and evidence_count > 0:
+        has_corpus = True
+
     if label in _TRUTH_VALUES:
+        if not has_corpus and label in ("supported", "refuted"):
+            return "unclear"
         return label  # type: ignore[return-value]
 
     # Fallback when model omits truth_label (older rows).
+    if not has_corpus:
+        return "unclear"
     if aggregate >= 0.62:
         return "supported"
     if aggregate <= 0.38:

@@ -77,10 +77,18 @@ async def build_claim_live_context(
             analyses=pending_analyses,
             canonical_claim_text=claim.canonical_claim_text,
         )
-        truth_label = truth_label_from_analyses(rows, processing_status=proc)
+        truth_label = truth_label_from_analyses(
+            rows,
+            processing_status=proc,
+            evidence_count=int(claim.evidence_count or 0),
+        )
     elif complete:
         claim_rows = await ai_repo.list_for_target("claim", claim.id)
-        truth_label = truth_label_from_analyses(claim_rows, processing_status="completed")
+        truth_label = truth_label_from_analyses(
+            claim_rows,
+            processing_status="completed",
+            evidence_count=int(claim.evidence_count or 0),
+        )
 
     staff_reviewed = await claim_has_staff_activity(
         session,

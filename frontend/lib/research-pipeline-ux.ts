@@ -538,7 +538,7 @@ export function buildSubmitOutcomes(
 
       id: "truth",
 
-      text: `Truth status: ${formatTruthLabel(detail.truth_label)} (from matched sources and assessment).`,
+      text: `Truth status: ${formatTruthLabel(detail.truth_label)} (from library sources on record).`,
 
     });
 

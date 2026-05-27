@@ -81,11 +81,34 @@ def test_truth_label_supported_after_verdict() -> None:
             self.analysis_type = analysis_type
             self.structured_payload = payload
 
+    provenance = {"has_corpus_evidence": True}
     analyses = [
-        Row("confidence_analysis", {"aggregate": 0.9, "truth_label": "supported"}),
-        Row("structured_verdict", {"verdict": {"verdict_summary": "Supported."}}),
+        Row(
+            "confidence_analysis",
+            {"scores": {"aggregate": 0.9, "truth_label": "supported"}, "provenance": provenance},
+        ),
+        Row("structured_verdict", {"verdict": {"verdict_summary": "Supported."}, "provenance": provenance}),
     ]
     assert truth_label_from_analyses(analyses, processing_status="awaiting_moderation") == "supported"
+
+
+def test_truth_label_unclear_without_corpus_even_when_model_says_supported() -> None:
+    class Row:
+        def __init__(self, analysis_type: str, payload: dict) -> None:
+            self.analysis_type = analysis_type
+            self.structured_payload = payload
+
+    analyses = [
+        Row(
+            "confidence_analysis",
+            {
+                "scores": {"aggregate": 0.9, "truth_label": "supported"},
+                "provenance": {"has_corpus_evidence": False},
+            },
+        ),
+        Row("structured_verdict", {"verdict": {"verdict_summary": "Supported."}}),
+    ]
+    assert truth_label_from_analyses(analyses, processing_status="awaiting_moderation") == "unclear"
 
 
 def test_dedupe_public_ai_analyses_hides_duplicate_confidence_text() -> None:
@@ -142,18 +165,15 @@ def test_resolve_live_summary_replaces_stale_rejection_hint() -> None:
     assert "rejection hint" not in out.lower()
 
 
-def test_provisional_verdict_uses_rationale_when_truth_known() -> None:
+def test_provisional_verdict_without_corpus_stays_inconclusive() -> None:
     scores = {
         "aggregate": 0.88,
         "truth_label": "refuted",
         "controversy_hint": 0.05,
-        "rationale": (
-            "Platinum typically trades at a higher price per ounce than silver; "
-            "the claim reverses the usual market ordering."
-        ),
+        "rationale": "Platinum typically trades higher than silver.",
     }
     verdict = _provisional_verdict_from_scores(scores)
-    assert "Platinum" in verdict["verdict_summary"]
+    assert "no library sources matched" in verdict["verdict_summary"].lower()
     assert verdict["controversy_hint"] == 0.05
 
 
@@ -164,7 +184,7 @@ def test_provisional_summary_uses_confidence_rationale() -> None:
     }
     assert "Gold is denser" in _research_summary_from_scores(scores, has_corpus_evidence=False)
     verdict = _provisional_verdict_from_scores(scores)
-    assert "no archived sources matched" in verdict["verdict_summary"]
+    assert "no library sources matched" in verdict["verdict_summary"].lower()
     assert verdict["confidence_hint"] == 0.9
     assert verdict["citations"] == []
 

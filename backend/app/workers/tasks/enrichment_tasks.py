@@ -84,25 +84,15 @@ def _provisional_verdict_from_scores(scores: dict[str, Any]) -> dict[str, Any]:
 
     aggregate = float(scores.get("aggregate", 0.5) or 0.5)
 
-    rationale = str(scores.get("rationale", "")).strip()
-
-    truth = str(scores.get("truth_label", "")).strip().lower()
-
     controversy = float(scores.get("controversy_hint", 0.0) or 0.0)
 
-    if rationale and truth in {"supported", "refuted"}:
+    summary = (
 
-        summary = rationale
+        f"Assessment (confidence {aggregate:.0%}): no library sources matched this claim yet. "
 
-    else:
+        "Truth status stays inconclusive until evidence is on record."
 
-        summary = (
-
-            f"Assessment (confidence {aggregate:.0%}): no archived sources matched, "
-
-            "but general knowledge may still apply. See the research summary."
-
-        )
+    )
 
     return {
 
