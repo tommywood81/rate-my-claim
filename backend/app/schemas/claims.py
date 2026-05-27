@@ -3,21 +3,23 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CreateClaimRequest(BaseModel):
-    """Submit a new empirical claim for enrichment."""
+    """Submit a new empirical claim for enrichment (claim text only; no user URLs)."""
+
+    model_config = ConfigDict(extra="forbid")
 
     raw_claim_text: str = Field(min_length=10, max_length=8000)
-    source_urls: list[str] = Field(default_factory=list, max_length=20)
 
 
 class ResubmitPendingRequest(BaseModel):
     """Revise a pending claim after moderator requested changes."""
 
+    model_config = ConfigDict(extra="forbid")
+
     raw_claim_text: str = Field(min_length=10, max_length=8000)
-    source_urls: list[str] | None = Field(default=None, max_length=20)
 
 
 class DuplicateHintResponse(BaseModel):

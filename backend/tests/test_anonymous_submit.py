@@ -21,7 +21,7 @@ async def test_guest_can_submit_claim(async_client: AsyncClient) -> None:
 
     submit = await async_client.post(
         "/api/v1/pending-claims",
-        json={"raw_claim_text": "The Earth has one natural satellite.", "source_urls": []},
+        json={"raw_claim_text": "The Earth has one natural satellite."},
         headers={"X-CSRF-Token": token} if token else {},
     )
     assert submit.status_code == 200, submit.text

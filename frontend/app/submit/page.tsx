@@ -26,7 +26,6 @@ type SubmitResponse = {
 type TrackingState = {
   pendingId: string;
   slug: string;
-  sourceUrlCount: number;
   duplicateCount: number;
   canonicalCandidate: string | null;
   errorMessage: string | null;
@@ -34,7 +33,6 @@ type TrackingState = {
 
 export default function SubmitPage() {
   const [text, setText] = useState("");
-  const [urls, setUrls] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [csrfReady, setCsrfReady] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -153,13 +151,9 @@ export default function SubmitPage() {
     setElapsedSec(0);
     let startedTracking = false;
     try {
-      const list = urls
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean);
       const data = await apiFetch<SubmitResponse>("/api/v1/pending-claims", {
         method: "POST",
-        body: JSON.stringify({ raw_claim_text: text, source_urls: list }),
+        body: JSON.stringify({ raw_claim_text: text }),
       });
       if (data.public_slug) {
         startedTracking = true;
@@ -170,7 +164,6 @@ export default function SubmitPage() {
         setTracking({
           pendingId: data.id,
           slug: data.public_slug,
-          sourceUrlCount: list.length,
           duplicateCount: data.duplicate_hints?.length ?? data.duplicate_candidate_ids?.length ?? 0,
           canonicalCandidate: data.canonical_candidate_text ?? null,
           errorMessage: data.error_message ?? null,
@@ -188,7 +181,6 @@ export default function SubmitPage() {
         `Submission received. Once processing finishes, find it on Browse.`,
       );
       setText("");
-      setUrls("");
     } catch (err: unknown) {
       setMsg(err instanceof Error ? err.message : "Failed");
     } finally {
@@ -236,7 +228,6 @@ export default function SubmitPage() {
           elapsedSec={elapsedSec}
           trackCtx={{
             elapsedSec,
-            sourceUrlCount: tracking.sourceUrlCount,
             indexedClaims,
           }}
           duplicateCount={tracking.duplicateCount}
@@ -256,14 +247,6 @@ export default function SubmitPage() {
             rows={6}
             className="owid-input w-full p-3 text-sm"
             placeholder="State one clear, testable claim…"
-          />
-          <textarea
-            value={urls}
-            onChange={(e) => setUrls(e.target.value)}
-            disabled={isSubmitting}
-            rows={4}
-            className="owid-input w-full p-3 font-mono text-xs"
-            placeholder="Optional source URLs, one per line"
           />
           <button
             type="submit"
@@ -309,7 +292,6 @@ export default function SubmitPage() {
               setTracking(null);
               setClaimDetail(null);
               setText("");
-              setUrls("");
             }}
           >
             Submit another claim

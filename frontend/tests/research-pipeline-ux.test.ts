@@ -17,15 +17,15 @@ describe("processingStatusToStageKey", () => {
 });
 
 describe("submitActiveStageMessage", () => {
-  it("mentions source URLs during enriching", () => {
-    const msg = submitActiveStageMessage("enriching", { elapsedSec: 10, sourceUrlCount: 2 });
-    expect(msg).toContain("2 linked source");
+  it("mentions library search during enriching", () => {
+    const msg = submitActiveStageMessage("enriching", { elapsedSec: 10, indexedClaims: 12 });
+    expect(msg).toContain("12 claims");
+    expect(msg).toContain("AI pass");
   });
 
   it("mentions indexed claims when provided", () => {
     const msg = submitActiveStageMessage("embedding", {
       elapsedSec: 5,
-      sourceUrlCount: 0,
       indexedClaims: 28,
     });
     expect(msg).toContain("28");

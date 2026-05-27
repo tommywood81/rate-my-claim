@@ -103,7 +103,6 @@ async def test_ingestion_pipeline_reaches_completed_assessment(
         headers={"X-CSRF-Token": csrf} if csrf else {},
         json={
             "raw_claim_text": "Regular physical activity improves long-term cardiovascular outcomes.",
-            "source_urls": [],
         },
     )
     assert submit.status_code == 200, submit.text
@@ -188,7 +187,6 @@ async def test_moderation_revision_and_claim_lifecycle(
         headers={"X-CSRF-Token": user_csrf} if user_csrf else {},
         json={
             "raw_claim_text": unique_claim,
-            "source_urls": [],
         },
     )
     pending_id = submit.json()["data"]["id"]
@@ -224,7 +222,6 @@ async def test_moderation_revision_and_claim_lifecycle(
         headers={"X-CSRF-Token": user_csrf2} if user_csrf2 else {},
         json={
             "raw_claim_text": f"{unique_claim} (revised for healthy adults cohort).",
-            "source_urls": [],
         },
     )
     assert patch.status_code == 200

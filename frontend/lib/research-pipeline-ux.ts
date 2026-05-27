@@ -360,8 +360,6 @@ export type SubmitTrackContext = {
 
   elapsedSec: number;
 
-  sourceUrlCount: number;
-
   indexedClaims?: number;
 
 };
@@ -409,12 +407,6 @@ export function submitActiveStageMessage(
       return "Sharpening the wording into a clear, testable claim…";
 
     case "enriching":
-
-      if (ctx.sourceUrlCount > 0) {
-
-        return `Reading ${ctx.sourceUrlCount} linked source${ctx.sourceUrlCount === 1 ? "" : "s"}, ${librarySearch.toLowerCase()} Running the AI pass (often 20–40s).`;
-
-      }
 
       return `${librarySearch} Running the AI pass (often 20–40s).`;
 

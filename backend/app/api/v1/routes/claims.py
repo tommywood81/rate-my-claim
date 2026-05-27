@@ -17,7 +17,6 @@ from app.models.user import User
 from app.models.claim import ProcessingStatus
 from app.repositories.ai_analysis_repository import AIAnalysisRepository
 from app.repositories.claims_repository import ClaimRepository
-from app.repositories.platform_repository import PlatformRepository
 from app.services.ingestion.claim_normalization import normalize_claim_text
 from app.services.ingestion.pipeline_audit import IngestionPipelineAudit
 from app.schemas.claims import (
@@ -80,16 +79,13 @@ async def submit_claim(
     pending = await repo.create_pending(
         raw_text=normalized,
         user_id=user.id if user else None,
-        source_urls=body.source_urls,
+        source_urls=[],
     )
     pending.normalized_claim_text = normalized
-    platform = PlatformRepository(db)
-    for url in (body.source_urls or [])[:20]:
-        await platform.create_ingestion_job(pending_claim_id=pending.id, source_url=str(url))
     await IngestionPipelineAudit(db).log_submitted(
         pending_id=pending.id,
         actor_id=user.id if user else None,
-        source_url_count=len(body.source_urls or []),
+        source_url_count=0,
         anonymous=user is None,
     )
     live_claim = await ensure_live_claim_for_pending(db, pending)
@@ -146,8 +142,6 @@ async def resubmit_pending(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="not_revision_requested")
     pending.raw_claim_text = normalize_claim_text(body.raw_claim_text)
     pending.normalized_claim_text = pending.raw_claim_text
-    if body.source_urls is not None:
-        pending.source_urls = body.source_urls
     pending.processing_status = ProcessingStatus.submitted
     pending.error_message = None
     process_pending_claim.delay(str(pending.id))
