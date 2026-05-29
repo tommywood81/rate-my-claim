@@ -47,6 +47,18 @@ def test_refuted_high_aggregate_without_corpus() -> None:
     )
 
 
+def test_weak_refuted_aggregate_becomes_inconclusive() -> None:
+    assert (
+        resolve_truth_label_from_scores(
+            aggregate=0.10,
+            controversy=0.0,
+            model_label="refuted",
+            cfg=_CFG,
+        )
+        == "unclear"
+    )
+
+
 def test_narrow_band_stays_inconclusive() -> None:
     assert (
         resolve_truth_label_from_scores(

@@ -7,7 +7,13 @@ from datetime import UTC, datetime
 import pytest
 
 from app.core.enrichment_pipeline_config import SourceDiscoveryConfig
-from app.services.enrichment.excerpt_utils import pick_relevant_excerpt
+from app.services.enrichment.discovery_queries import build_discovery_queries
+from app.services.enrichment.excerpt_utils import (
+    excerpt_claim_overlap,
+    excerpt_meets_relevance,
+    pick_keyword_window_excerpt,
+    pick_relevant_excerpt,
+)
 from app.services.enrichment.reputable_allowlist import (
     clear_allowlist_cache,
     is_allowlisted_url,
@@ -163,6 +169,36 @@ def test_parse_ddg_html_reads_result_links() -> None:
     ]
 
 
+def test_build_discovery_queries_includes_price_focus() -> None:
+    variants = build_discovery_queries("Lithium is more expensive than silver.")
+    assert "Lithium is more expensive than silver." in variants
+    assert any("price" in v.lower() for v in variants)
+    assert any("britannica.com" in v for v in variants)
+
+
+def test_excerpt_meets_relevance_rejects_rhodium_only() -> None:
+    claim = "Lithium is more expensive than silver."
+    assert (
+        excerpt_meets_relevance(
+            "Rhodium and iridium are the most expensive elements.",
+            claim,
+            min_overlap=1,
+        )
+        is False
+    )
+    assert excerpt_meets_relevance(
+        "Lithium costs more than silver per ounce.", claim, min_overlap=1
+    )
+
+
+def test_keyword_window_finds_entity_in_page() -> None:
+    text = "Intro paragraph. " * 5 + "Lithium prices surged in 2022 while industrial demand grew."
+    claim = "Lithium is more expensive than silver."
+    window = pick_keyword_window_excerpt(text, claim, max_chars=120)
+    assert "lithium" in window.lower()
+    assert excerpt_claim_overlap(window, claim) >= 1
+
+
 def test_wikipedia_query_variants_shortens_long_claims() -> None:
     variants = wikipedia_query_variants("The blue whale is the largest fish")
     assert "The blue whale is the largest fish" in variants
@@ -172,12 +208,15 @@ def test_wikipedia_query_variants_shortens_long_claims() -> None:
 
 @pytest.mark.asyncio
 async def test_discover_reputable_sources_live_wikipedia_fallback() -> None:
-    """Integration: Wikipedia fallback finds allowlisted pages for factual claims."""
+    """Integration: multi-query discovery finds allowlisted pages for factual claims."""
     cfg = SourceDiscoveryConfig(
         enabled=True,
         max_sources=2,
         excerpt_max_chars=300,
         min_publisher_credibility=0.70,
+        min_excerpt_keyword_overlap=1,
+        max_urls_per_domain=2,
+        max_candidate_fetches=8,
         search_result_limit=10,
         allowlist_config_path="config/reputable_sources.yaml",
     )
@@ -188,4 +227,54 @@ async def test_discover_reputable_sources_live_wikipedia_fallback() -> None:
     assert len(hits) >= 1
     assert all(h.excerpt for h in hits)
     assert all(h.url.startswith("https://") for h in hits)
+    claim = "The blue whale is the largest fish"
+    assert all(excerpt_claim_overlap(h.excerpt, claim) >= 1 for h in hits)
+
+
+@pytest.mark.asyncio
+async def test_discover_skips_irrelevant_excerpt() -> None:
+    cfg = SourceDiscoveryConfig(
+        enabled=True,
+        max_sources=2,
+        min_excerpt_keyword_overlap=1,
+        allowlist_config_path="config/reputable_sources.yaml",
+    )
+
+    class _Extractor:
+        async def extract(self, url: str):
+            from app.services.evidence.html_extractor import ExtractedDocument
+
+            if "good" in url:
+                return ExtractedDocument(
+                    url=url,
+                    title="Good",
+                    text="Lithium costs more than silver per kilogram in 2024 markets.",
+                    publisher="NIH",
+                    authors=None,
+                    publication_date=None,
+                )
+            return ExtractedDocument(
+                url=url,
+                title="Bad",
+                text="Rhodium and iridium are the most expensive elements by mass.",
+                publisher="NIH",
+                authors=None,
+                publication_date=None,
+            )
+
+    search = StaticUrlSearch(
+        [
+            "https://www.nih.gov/bad",
+            "https://www.nih.gov/good",
+        ]
+    )
+    hits = await discover_reputable_sources(
+        "Lithium is more expensive than silver.",
+        cfg=cfg,
+        extractor=_Extractor(),
+        search=search,
+    )
+    assert len(hits) == 1
+    assert "good" in hits[0].url
+    assert "lithium" in hits[0].excerpt.lower()
 

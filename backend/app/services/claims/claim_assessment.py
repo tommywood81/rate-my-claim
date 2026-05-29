@@ -200,6 +200,8 @@ def resolve_truth_label_from_scores(
         return "unclear"
 
     if label in ("supported", "refuted"):
+        if aggregate < rules.weak_evidence_inconclusive_below:
+            return "unclear"
         return label  # type: ignore[return-value]
 
     if label == "unclear":

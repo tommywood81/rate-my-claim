@@ -37,6 +37,24 @@ class SourceDiscoveryConfig(BaseModel):
     max_sources: int = Field(default=3, ge=0, le=10)
     excerpt_max_chars: int = Field(default=320, ge=80, le=2000)
     min_publisher_credibility: float = Field(default=0.70, ge=0.0, le=1.0)
+    min_excerpt_keyword_overlap: int = Field(
+        default=1,
+        ge=0,
+        le=8,
+        description="Min claim keywords that must appear in saved excerpt (0 = disabled)",
+    )
+    max_urls_per_domain: int = Field(
+        default=2,
+        ge=1,
+        le=5,
+        description="Allow multiple pages from same allowlisted domain (e.g. Wikipedia)",
+    )
+    max_candidate_fetches: int = Field(
+        default=8,
+        ge=1,
+        le=20,
+        description="Max allowlisted URLs to fetch while filling max_sources",
+    )
     search_result_limit: int = Field(default=20, ge=3, le=40)
     fetch_timeout_seconds: float = Field(default=10.0, ge=2.0, le=60.0)
     allowlist_config_path: str = Field(
@@ -84,6 +102,12 @@ class TruthResolutionConfig(BaseModel):
     high_controversy_for_inconclusive: float = Field(default=0.72, ge=0.0, le=1.0)
     contested_aggregate_low: float = Field(default=0.42, ge=0.0, le=1.0)
     contested_aggregate_high: float = Field(default=0.58, ge=0.0, le=1.0)
+    weak_evidence_inconclusive_below: float = Field(
+        default=0.25,
+        ge=0.0,
+        le=0.5,
+        description="supported/refuted with aggregate below this become inconclusive",
+    )
 
 
 class EnrichmentPipelineConfig(BaseModel):

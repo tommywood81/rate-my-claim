@@ -18,6 +18,9 @@ sources:
   max_sources: 3
   excerpt_max_chars: 320
   min_publisher_credibility: 0.70
+  min_excerpt_keyword_overlap: 1
+  max_urls_per_domain: 2
+  max_candidate_fetches: 8
   search_result_limit: 20
   fetch_timeout_seconds: 10.0
   allowlist_config_path: config/reputable_sources.yaml
@@ -63,3 +66,4 @@ truth:
   high_controversy_for_inconclusive: 0.72
   contested_aggregate_low: 0.42
   contested_aggregate_high: 0.58
+  weak_evidence_inconclusive_below: 0.25

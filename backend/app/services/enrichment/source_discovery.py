@@ -9,7 +9,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.core.enrichment_pipeline_config import SourceDiscoveryConfig
-from app.services.enrichment.excerpt_utils import pick_relevant_excerpt
+from app.services.enrichment.discovery_queries import build_discovery_queries
+from app.services.enrichment.excerpt_utils import (
+    excerpt_claim_overlap,
+    excerpt_meets_relevance,
+    pick_relevant_excerpt,
+)
 from app.services.enrichment.reputable_allowlist import (
     AllowlistedPublisher,
     load_allowlisted_publishers,
@@ -54,9 +59,47 @@ def hits_to_url_blocks(hits: list[ReputableSourceHit]) -> list[dict[str, Any]]:
     return blocks
 
 
-def _search_query(claim_text: str) -> str:
-    text = " ".join(claim_text.split())
-    return text[:180]
+async def _collect_candidate_urls(
+    claim_text: str,
+    *,
+    search: WebSearchProvider,
+    search_result_limit: int,
+) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for query in build_discovery_queries(claim_text):
+        batch = await search.search(query, limit=search_result_limit)
+        for url in batch:
+            if url in seen:
+                continue
+            seen.add(url)
+            ordered.append(url)
+    return ordered
+
+
+def _rank_allowlisted_candidates(
+    candidate_urls: list[str],
+    allowlist: list,
+    *,
+    cfg: SourceDiscoveryConfig,
+) -> list[tuple[float, str, AllowlistedPublisher]]:
+    ranked: list[tuple[float, str, AllowlistedPublisher]] = []
+    domain_counts: dict[str, int] = {}
+    for url in candidate_urls:
+        match = match_allowlisted_publisher(url, allowlist)
+        if match is None:
+            continue
+        if match.credibility < cfg.min_publisher_credibility:
+            continue
+        host_key = match.domain
+        count = domain_counts.get(host_key, 0)
+        if count >= cfg.max_urls_per_domain:
+            continue
+        domain_counts[host_key] = count + 1
+        ranked.append((match.credibility, url, match))
+
+    ranked.sort(key=lambda row: (-row[0], row[1]))
+    return ranked
 
 
 async def _fetch_one(
@@ -99,7 +142,7 @@ async def discover_reputable_sources(
     """
     Search the web, keep allowlisted hosts, fetch pages, and return up to max_sources hits.
 
-    Returns fewer than max_sources when search or fetch fails — never pads with junk.
+    Tries multiple query variants and skips excerpts that do not mention claim keywords.
     """
     if not cfg.enabled or cfg.max_sources <= 0:
         return []
@@ -109,30 +152,23 @@ async def discover_reputable_sources(
         logger.warning("reputable_allowlist_empty")
         return []
 
-    query = _search_query(claim_text)
     search_impl = search or default_web_search(timeout=cfg.fetch_timeout_seconds)
     extractor_impl = extractor or HtmlExtractor(timeout=cfg.fetch_timeout_seconds)
 
-    candidate_urls = await search_impl.search(query, limit=cfg.search_result_limit)
-    ranked: list[tuple[float, str, AllowlistedPublisher]] = []
-    seen_hosts: set[str] = set()
-    for url in candidate_urls:
-        match = match_allowlisted_publisher(url, allowlist)
-        if match is None:
-            continue
-        if match.credibility < cfg.min_publisher_credibility:
-            continue
-        host_key = match.domain
-        if host_key in seen_hosts:
-            continue
-        seen_hosts.add(host_key)
-        ranked.append((match.credibility, url, match))
-
-    ranked.sort(key=lambda row: -row[0])
-    targets = ranked[: cfg.max_sources]
-    if not targets:
-        logger.info("reputable_source_no_allowlist_hits", extra={"query": query[:120]})
+    candidate_urls = await _collect_candidate_urls(
+        claim_text,
+        search=search_impl,
+        search_result_limit=cfg.search_result_limit,
+    )
+    ranked = _rank_allowlisted_candidates(candidate_urls, allowlist, cfg=cfg)
+    if not ranked:
+        logger.info(
+            "reputable_source_no_allowlist_hits",
+            extra={"query": claim_text[:120], "candidates": len(candidate_urls)},
+        )
         return []
+
+    fetch_targets = ranked[: cfg.max_candidate_fetches]
 
     async def _run(url: str, publisher: AllowlistedPublisher) -> ReputableSourceHit | None:
         return await _fetch_one(
@@ -144,14 +180,41 @@ async def discover_reputable_sources(
         )
 
     results = await asyncio.gather(
-        *[_run(url, publisher) for _cred, url, publisher in targets],
+        *[_run(url, publisher) for _cred, url, publisher in fetch_targets],
         return_exceptions=True,
     )
 
-    hits: list[ReputableSourceHit] = []
+    min_overlap = cfg.min_excerpt_keyword_overlap
+    scored_hits: list[tuple[int, float, ReputableSourceHit]] = []
     for item in results:
-        if isinstance(item, ReputableSourceHit):
-            hits.append(item)
-        elif isinstance(item, Exception):
+        if isinstance(item, Exception):
             logger.info("reputable_source_fetch_error", extra={"error": str(item)})
+            continue
+        if not isinstance(item, ReputableSourceHit):
+            continue
+        if not excerpt_meets_relevance(
+            item.excerpt, claim_text, min_overlap=min_overlap
+        ):
+            overlap = excerpt_claim_overlap(item.excerpt, claim_text)
+            logger.info(
+                "reputable_source_excerpt_irrelevant",
+                extra={"url": item.url, "overlap": overlap, "min": min_overlap},
+            )
+            continue
+        overlap = excerpt_claim_overlap(item.excerpt, claim_text)
+        scored_hits.append((overlap, item.credibility_score, item))
+
+    scored_hits.sort(key=lambda row: (-row[0], -row[1]))
+    hits = [item for _ov, _cred, item in scored_hits[: cfg.max_sources]]
+
+    if len(hits) < cfg.max_sources:
+        logger.info(
+            "reputable_source_partial",
+            extra={
+                "wanted": cfg.max_sources,
+                "saved": len(hits),
+                "fetched": len(fetch_targets),
+                "allowlisted": len(ranked),
+            },
+        )
     return hits
