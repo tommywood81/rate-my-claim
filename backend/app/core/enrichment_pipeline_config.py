@@ -18,8 +18,9 @@ _DEFAULT_CONFIG_PATH = _BACKEND_DIR / "config" / "enrichment_pipeline.yaml"
 
 
 class RetrievalStageConfig(BaseModel):
-    """Similar-claim borrow + prompt context limits."""
+    """Prompt context limits for assessment (legacy neighbor keys kept for compatibility)."""
 
+    borrow_from_similar_claims: bool = False
     min_similarity: float = Field(default=0.72, ge=0.0, le=1.0)
     similar_claim_search_limit: int = Field(default=12, ge=1, le=50)
     max_similar_claims: int = Field(default=6, ge=1, le=30)
@@ -27,6 +28,21 @@ class RetrievalStageConfig(BaseModel):
     excerpt_max_chars: int = Field(default=500, ge=80, le=4000)
     context_max_chars: int = Field(default=6000, ge=500, le=32000)
     digest_line_limit: int = Field(default=10, ge=1, le=50)
+
+
+class SourceDiscoveryConfig(BaseModel):
+    """One-shot reputable web source fetch during enrichment (no neighbor borrow)."""
+
+    enabled: bool = True
+    max_sources: int = Field(default=3, ge=0, le=10)
+    excerpt_max_chars: int = Field(default=320, ge=80, le=2000)
+    min_publisher_credibility: float = Field(default=0.70, ge=0.0, le=1.0)
+    search_result_limit: int = Field(default=20, ge=3, le=40)
+    fetch_timeout_seconds: float = Field(default=10.0, ge=2.0, le=60.0)
+    allowlist_config_path: str = Field(
+        default="config/reputable_sources.yaml",
+        description="Relative to backend root unless absolute",
+    )
 
 
 class CrawlStageConfig(BaseModel):
@@ -49,16 +65,35 @@ class AIStageConfig(BaseModel):
 
     use_combined_assessment: bool = True
     skip_evidence_summary_call: bool = True
-    use_provisional_verdict_without_corpus: bool = True
+    use_provisional_verdict_without_corpus: bool = False
     prompt_claim_max_chars: int = Field(default=8000, ge=500, le=32000)
+
+
+class TruthResolutionConfig(BaseModel):
+    """
+    When to show public truth as inconclusive (~1% target).
+
+    Most claims resolve to supported/refuted from model scores; only narrow middling
+    or high-controversy bands stay inconclusive.
+    """
+
+    supported_aggregate_min: float = Field(default=0.55, ge=0.0, le=1.0)
+    refuted_aggregate_max: float = Field(default=0.45, ge=0.0, le=1.0)
+    inconclusive_aggregate_low: float = Field(default=0.47, ge=0.0, le=1.0)
+    inconclusive_aggregate_high: float = Field(default=0.53, ge=0.0, le=1.0)
+    high_controversy_for_inconclusive: float = Field(default=0.72, ge=0.0, le=1.0)
+    contested_aggregate_low: float = Field(default=0.42, ge=0.0, le=1.0)
+    contested_aggregate_high: float = Field(default=0.58, ge=0.0, le=1.0)
 
 
 class EnrichmentPipelineConfig(BaseModel):
     """Full enrichment pipeline tuning document."""
 
     retrieval: RetrievalStageConfig = Field(default_factory=RetrievalStageConfig)
+    sources: SourceDiscoveryConfig = Field(default_factory=SourceDiscoveryConfig)
     crawl: CrawlStageConfig = Field(default_factory=CrawlStageConfig)
     ai: AIStageConfig = Field(default_factory=AIStageConfig)
+    truth: TruthResolutionConfig = Field(default_factory=TruthResolutionConfig)
 
 
 def _resolve_config_path() -> Path:

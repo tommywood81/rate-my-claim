@@ -13,7 +13,11 @@ from app.core.config import Settings
 from app.repositories.claims_repository import ClaimRepository
 from app.schemas.atlas import ClaimAtlasPointResponse, ClaimAtlasResponse
 from app.schemas.common import SuccessEnvelope
-from app.services.claims.embedding_atlas import build_atlas_projection, rows_from_claims
+from app.services.claims.embedding_atlas import (
+    build_atlas_projection,
+    enrich_rows_with_truth_labels,
+    rows_from_claims,
+)
 
 router = APIRouter(tags=["atlas"])
 
@@ -33,7 +37,8 @@ async def claim_embedding_atlas(
     repo = ClaimRepository(db)
     claims = await repo.list_claims_with_embeddings(limit=cap)
     total_indexed = await repo.count_claims_with_embeddings()
-    projection = build_atlas_projection(rows_from_claims(claims))
+    rows = await enrich_rows_with_truth_labels(db, rows_from_claims(claims))
+    projection = build_atlas_projection(rows)
 
     data = ClaimAtlasResponse(
         points=[ClaimAtlasPointResponse.model_validate(asdict(p)) for p in projection.points],

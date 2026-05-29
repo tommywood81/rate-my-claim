@@ -2,20 +2,25 @@
 # Restart API/Celery after edits (config is loaded once per process).
 
 retrieval:
-  # Vector similarity floor for borrowing evidence from other claims (0–1).
+  # Neighbor-claim evidence borrow is disabled — sources come from reputable web fetch instead.
+  borrow_from_similar_claims: false
+  # Legacy keys (unused when borrow is false):
   min_similarity: 0.72
-  # Max similar claims considered before collecting evidence rows.
   similar_claim_search_limit: 12
-  # Max neighbor claims whose evidence may be borrowed.
   max_similar_claims: 6
-  # Max evidence rows attached to the assessment context.
   evidence_line_limit: 10
-  # Max characters per evidence line excerpt in the model prompt.
   excerpt_max_chars: 500
-  # Max total characters sent as verdict CONTEXT.
   context_max_chars: 6000
-  # Max lines in the confidence digest (subset of context).
   digest_line_limit: 10
+
+sources:
+  enabled: true
+  max_sources: 3
+  excerpt_max_chars: 320
+  min_publisher_credibility: 0.70
+  search_result_limit: 20
+  fetch_timeout_seconds: 10.0
+  allowlist_config_path: config/reputable_sources.yaml
 
 crawl:
   # Max pending URL ingestion jobs processed per enrichment run.
@@ -44,7 +49,17 @@ ai:
   use_combined_assessment: true
   # Skip separate summarize_evidence call; use verdict_summary (or rationale) as ai_summary.
   skip_evidence_summary_call: true
-  # When no corpus lines, skip structured_verdict and use scores-only provisional verdict.
-  use_provisional_verdict_without_corpus: true
+  # When false, run structured_verdict even with an empty library (recommended).
+  use_provisional_verdict_without_corpus: false
   # Max chars passed into combined/summary prompts beyond context caps.
   prompt_claim_max_chars: 8000
+
+truth:
+  # Public truth defaults to supported/refuted; inconclusive only in narrow edge bands (~1% target).
+  supported_aggregate_min: 0.55
+  refuted_aggregate_max: 0.45
+  inconclusive_aggregate_low: 0.47
+  inconclusive_aggregate_high: 0.53
+  high_controversy_for_inconclusive: 0.72
+  contested_aggregate_low: 0.42
+  contested_aggregate_high: 0.58

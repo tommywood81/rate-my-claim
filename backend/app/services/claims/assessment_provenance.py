@@ -108,6 +108,7 @@ def build_enrichment_provenance(
     has_corpus_evidence: bool,
     url_artifact_ids: list[str],
     borrowed_evidence_ids: list[str],
+    reputable_source_urls: list[str] | None = None,
     assessment_run_at: datetime | None = None,
 ) -> dict:
     """Snapshot inputs stored inside structured_payload for later audit."""
@@ -123,6 +124,7 @@ def build_enrichment_provenance(
         "has_corpus_evidence": has_corpus_evidence,
         "url_artifact_ids": url_artifact_ids,
         "borrowed_evidence_ids": borrowed_evidence_ids,
+        "reputable_source_urls": reputable_source_urls or [],
         "line_map": line_map,
     }
 

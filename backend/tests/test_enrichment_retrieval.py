@@ -92,7 +92,7 @@ def test_truth_label_supported_after_verdict() -> None:
     assert truth_label_from_analyses(analyses, processing_status="awaiting_moderation") == "supported"
 
 
-def test_truth_label_unclear_without_corpus_even_when_model_says_supported() -> None:
+def test_truth_label_supported_without_corpus_when_model_says_supported() -> None:
     class Row:
         def __init__(self, analysis_type: str, payload: dict) -> None:
             self.analysis_type = analysis_type
@@ -102,13 +102,17 @@ def test_truth_label_unclear_without_corpus_even_when_model_says_supported() -> 
         Row(
             "confidence_analysis",
             {
-                "scores": {"aggregate": 0.9, "truth_label": "supported"},
+                "scores": {
+                    "aggregate": 0.9,
+                    "truth_label": "supported",
+                    "controversy_hint": 0.05,
+                },
                 "provenance": {"has_corpus_evidence": False},
             },
         ),
         Row("structured_verdict", {"verdict": {"verdict_summary": "Supported."}}),
     ]
-    assert truth_label_from_analyses(analyses, processing_status="awaiting_moderation") == "unclear"
+    assert truth_label_from_analyses(analyses, processing_status="awaiting_moderation") == "supported"
 
 
 def test_dedupe_public_ai_analyses_hides_duplicate_confidence_text() -> None:
@@ -165,7 +169,7 @@ def test_resolve_live_summary_replaces_stale_rejection_hint() -> None:
     assert "rejection hint" not in out.lower()
 
 
-def test_provisional_verdict_without_corpus_stays_inconclusive() -> None:
+def test_provisional_verdict_without_corpus_mentions_truth_label() -> None:
     scores = {
         "aggregate": 0.88,
         "truth_label": "refuted",
@@ -173,7 +177,7 @@ def test_provisional_verdict_without_corpus_stays_inconclusive() -> None:
         "rationale": "Platinum typically trades higher than silver.",
     }
     verdict = _provisional_verdict_from_scores(scores)
-    assert "no library sources matched" in verdict["verdict_summary"].lower()
+    assert "no reputable web sources were retrieved" in verdict["verdict_summary"].lower()
     assert verdict["controversy_hint"] == 0.05
 
 
@@ -184,12 +188,18 @@ def test_provisional_summary_uses_confidence_rationale() -> None:
     }
     assert "Gold is denser" in _research_summary_from_scores(scores, has_corpus_evidence=False)
     verdict = _provisional_verdict_from_scores(scores)
-    assert "no library sources matched" in verdict["verdict_summary"].lower()
+    assert "no reputable web sources were retrieved" in verdict["verdict_summary"].lower()
     assert verdict["confidence_hint"] == 0.9
     assert verdict["citations"] == []
 
 
-def test_similarity_floor_filters_weak_neighbors() -> None:
+def test_pipeline_config_disables_neighbor_borrow_by_default() -> None:
+    from app.core.enrichment_pipeline_config import load_enrichment_pipeline_config
+
+    cfg = load_enrichment_pipeline_config()
+    assert cfg.retrieval.borrow_from_similar_claims is False
+    assert cfg.sources.enabled is True
+    assert cfg.sources.max_sources == 3
     """Only neighbors above min_similarity should contribute claim ids."""
     # distance 0.35 -> similarity 0.65 (below 0.72)
     # distance 0.20 -> similarity 0.80 (above 0.72)

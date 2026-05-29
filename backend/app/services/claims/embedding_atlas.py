@@ -9,7 +9,12 @@ from uuid import UUID
 
 import numpy as np
 
-from app.models.claim import Claim
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.claim import Claim, ProcessingStatus
+from app.repositories.ai_analysis_repository import AIAnalysisRepository
+from app.repositories.claims_repository import ClaimRepository
+from app.services.claims.claim_assessment import truth_label_from_analyses
 
 
 @dataclass(frozen=True)
@@ -26,6 +31,7 @@ class AtlasClaimRow:
     freshness_score: float
     evidence_count: int
     embedding: list[float]
+    truth_label: str = "unclear"
 
 
 @dataclass(frozen=True)
@@ -41,6 +47,7 @@ class AtlasPoint:
     evidence_score: float
     freshness_score: float
     evidence_count: int
+    truth_label: str
     x: float
     y: float
     z: float
@@ -93,6 +100,45 @@ def rows_from_claims(claims: Sequence[Claim]) -> list[AtlasClaimRow]:
             )
         )
     return out
+
+
+def _coerce_processing_status(value: ProcessingStatus | str) -> str:
+    if isinstance(value, ProcessingStatus):
+        return value.value
+    text = str(value)
+    if text.startswith("ProcessingStatus."):
+        return text.split(".", 1)[1]
+    return text
+
+
+async def enrich_rows_with_truth_labels(
+    session: AsyncSession,
+    rows: list[AtlasClaimRow],
+) -> list[AtlasClaimRow]:
+    """Attach public truth banner labels for atlas coloring."""
+    if not rows:
+        return []
+    from dataclasses import replace
+
+    repo = ClaimRepository(session)
+    ai_repo = AIAnalysisRepository(session)
+    pending_map = await repo.pending_by_linked_claim_ids([r.id for r in rows])
+    enriched: list[AtlasClaimRow] = []
+    for row in rows:
+        pending = pending_map.get(row.id)
+        if pending is not None:
+            proc = _coerce_processing_status(pending.processing_status)
+            analyses = await ai_repo.list_for_target("pending_claim", pending.id)
+        else:
+            proc = "completed"
+            analyses = await ai_repo.list_for_target("claim", row.id)
+        truth = truth_label_from_analyses(
+            analyses,
+            processing_status=proc,
+            evidence_count=row.evidence_count,
+        )
+        enriched.append(replace(row, truth_label=truth or "unclear"))
+    return enriched
 
 
 def project_to_3d(vectors: list[list[float]]) -> list[tuple[float, float, float]]:
@@ -170,6 +216,7 @@ def build_atlas_projection(rows: list[AtlasClaimRow]) -> AtlasProjection:
             evidence_score=row.evidence_score,
             freshness_score=row.freshness_score,
             evidence_count=row.evidence_count,
+            truth_label=row.truth_label,
             x=coord[0],
             y=coord[1],
             z=coord[2],

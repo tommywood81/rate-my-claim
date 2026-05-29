@@ -24,8 +24,16 @@ describe("EvidenceList", () => {
       />,
     );
     expect(screen.getByText("Supporting (1)")).toBeInTheDocument();
-    const link = screen.getByRole("link", { name: /cardiovascular study/i });
-    expect(link).toHaveAttribute("href", "https://example.com/paper");
+    expect(screen.getByText("https://example.com/paper")).toHaveAttribute(
+      "href",
+      "https://example.com/paper",
+    );
+    expect(screen.getByRole("link", { name: /open source \(example\.com\)/i })).toHaveAttribute(
+      "href",
+      "https://example.com/paper",
+    );
+    expect(screen.getByText(/findings support moderate exercise/i)).toBeInTheDocument();
+    expect(screen.getByText(/saved 17\/05\/2026/i)).toBeInTheDocument();
   });
 
   it("returns null when empty", () => {

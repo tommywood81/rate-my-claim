@@ -224,11 +224,15 @@ export function SubmitClaimResultsPanel({ slug, detail, elapsedSec, inFlight }: 
           <h3 className="owid-section-heading text-lg">Evidence</h3>
           <p className="text-sm text-[var(--muted)]">
             <span className={evidenceBump ? "submit-evidence-count--bump" : ""}>
-              {totalEvidence} source{totalEvidence === 1 ? "" : "s"}
+              {totalEvidence} source{totalEvidence === 1 ? "" : "s"} on record
             </span>
             {inFlight && !complete ? " · still gathering" : ""}
           </p>
         </div>
+        <p className="text-sm text-[var(--muted)]">
+          Sources saved during automated assessment — click a link to open the page we fetched.
+          Each card shows the URL, excerpt, publisher, and when it was saved.
+        </p>
 
         {tabs.length > 1 && (
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Evidence categories">
@@ -268,7 +272,9 @@ export function SubmitClaimResultsPanel({ slug, detail, elapsedSec, inFlight }: 
           )
         ) : (
           <p className="text-sm text-[var(--muted)]">
-            {inFlight ? "Searching the claim library for sources…" : "No library sources matched yet."}
+            {inFlight
+              ? "Searching reputable sources and saving excerpts…"
+              : "No sources saved on record yet."}
           </p>
         )}
       </div>

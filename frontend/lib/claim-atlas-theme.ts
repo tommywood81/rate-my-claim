@@ -1,8 +1,12 @@
 /** Visual theme for the embedding atlas canvas (lab / light). */
 
-import type { AtlasColorMode } from "@/lib/claim-atlas-colors";
+import {
+  scoreToThemeRgb as scoreToAtlasRgb,
+  type AtlasColorMode,
+  type AtlasVisualTheme,
+} from "@/lib/claim-atlas-colors";
 
-export type AtlasVisualTheme = "dark" | "light";
+export type { AtlasVisualTheme } from "@/lib/claim-atlas-colors";
 
 export type AtlasPalette = {
   bgTop: string;
@@ -61,45 +65,11 @@ export function getAtlasPalette(theme: AtlasVisualTheme): AtlasPalette {
 }
 
 export function scoreToThemeRgb(
-  mode: AtlasColorMode,
+  mode: Exclude<AtlasColorMode, "truth">,
   value: number,
   theme: AtlasVisualTheme,
 ): string {
-  const t = Math.max(0, Math.min(1, value));
-  if (theme === "dark") {
-    if (mode === "confidence") {
-      const r = Math.round(80 + 100 * t);
-      const g = Math.round(160 + 70 * t);
-      const b = Math.round(220 - 40 * t);
-      return `rgb(${r},${g},${b})`;
-    }
-    if (mode === "controversy") {
-      const r = Math.round(180 + 60 * t);
-      const g = Math.round(120 - 30 * t);
-      const b = Math.round(200 - 80 * t);
-      return `rgb(${r},${g},${b})`;
-    }
-    const r = Math.round(100 + 40 * t);
-    const g = Math.round(200 + 30 * t);
-    const b = Math.round(160 + 50 * t);
-    return `rgb(${r},${g},${b})`;
-  }
-  if (mode === "confidence") {
-    const r = Math.round(90 + 70 * (1 - t));
-    const g = Math.round(120 + 80 * t);
-    const b = Math.round(160 + 60 * t);
-    return `rgb(${r},${g},${b})`;
-  }
-  if (mode === "controversy") {
-    const r = Math.round(120 + 120 * t);
-    const g = Math.round(140 - 60 * t);
-    const b = Math.round(150 - 80 * t);
-    return `rgb(${r},${g},${b})`;
-  }
-  const r = Math.round(100 - 40 * t);
-  const g = Math.round(130 + 50 * t);
-  const b = Math.round(140 + 30 * t);
-  return `rgb(${r},${g},${b})`;
+  return scoreToAtlasRgb(mode, value, theme);
 }
 
 /** Deterministic starfield for lab backdrop. */

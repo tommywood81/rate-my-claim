@@ -104,11 +104,57 @@ async def _append_assessment_evidence(
 
             excerpt = str(block.get("text") or "")[:8000]
 
+            credibility = float(block.get("credibility_score", 0.5) or 0.5)
+
+            retrieved_raw = block.get("retrieved_at")
+
+            retrieved_at = now
+
+            if retrieved_raw:
+
+                try:
+
+                    parsed = datetime.fromisoformat(str(retrieved_raw).replace("Z", "+00:00"))
+
+                    retrieved_at = parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+                except ValueError:
+
+                    retrieved_at = now
+
+            pub_raw = block.get("publication_date")
+
+            publication_date = None
+
+            if pub_raw:
+
+                try:
+
+                    publication_date = datetime.fromisoformat(str(pub_raw).replace("Z", "+00:00"))
+
+                    if publication_date.tzinfo is None:
+
+                        publication_date = publication_date.replace(tzinfo=UTC)
+
+                except ValueError:
+
+                    publication_date = None
+
+            source_type = (
+
+                EvidenceSourceType.api.value
+
+                if block.get("source_channel") == "reputable_web"
+
+                else EvidenceSourceType.user_submission.value
+
+            )
+
             ev = Evidence(
 
                 claim_id=claim.id,
 
-                source_type=EvidenceSourceType.user_submission.value,
+                source_type=source_type,
 
                 title=title[:512],
 
@@ -120,11 +166,13 @@ async def _append_assessment_evidence(
 
                 cleaned_content=excerpt or None,
 
+                publication_date=publication_date,
+
                 stance=EvidenceStance.contextualizes.value,
 
-                credibility_score=0.5,
+                credibility_score=credibility,
 
-                retrieval_timestamp=now,
+                retrieval_timestamp=retrieved_at,
 
                 retrieval_source=run_source,
 

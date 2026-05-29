@@ -1,0 +1,34 @@
+# Allowlisted publishers for one-shot enrichment source discovery.
+# Only URLs whose hostname matches (or is a subdomain of) these entries are fetched.
+
+publishers:
+  - domain: wikipedia.org
+    publisher: Wikipedia
+    credibility: 0.72
+  - domain: who.int
+    publisher: WHO
+    credibility: 0.92
+  - domain: cdc.gov
+    publisher: CDC
+    credibility: 0.90
+  - domain: nih.gov
+    publisher: NIH
+    credibility: 0.90
+  - domain: ncbi.nlm.nih.gov
+    publisher: NCBI
+    credibility: 0.88
+  - domain: nature.com
+    publisher: Nature
+    credibility: 0.85
+  - domain: sciencedirect.com
+    publisher: ScienceDirect
+    credibility: 0.82
+  - domain: britannica.com
+    publisher: Britannica
+    credibility: 0.80
+  - domain: edu
+    publisher: Academic (.edu)
+    credibility: 0.75
+  - domain: gov
+    publisher: Government (.gov)
+    credibility: 0.85

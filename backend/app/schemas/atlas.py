@@ -18,6 +18,7 @@ class ClaimAtlasPointResponse(BaseModel):
     evidence_score: float
     freshness_score: float
     evidence_count: int
+    truth_label: str = Field(description="supported, refuted, or unclear")
     x: float
     y: float
     z: float

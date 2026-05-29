@@ -17,3 +17,5 @@ async def test_atlas_claims_returns_200() -> None:
     body = res.json()
     assert body["success"] is True
     assert "points" in body["data"]
+    for pt in body["data"]["points"]:
+        assert pt["truth_label"] in ("supported", "refuted", "unclear")

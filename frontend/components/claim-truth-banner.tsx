@@ -45,8 +45,8 @@ export function ClaimTruthBanner({ label }: Props) {
     >
       <p className="font-semibold">Truth status: inconclusive</p>
       <p className="mt-1 text-[var(--muted)]">
-        No matching sources in the claim library yet — we will not call this supported or refuted until evidence is on
-        record. The research summary may still reflect general knowledge; status can change as sources are added.
+        Evidence and scores are too mixed or middling for a clear supported/refuted call — a contested edge case.
+        Status can change when new sources are added or the claim is re-assessed.
       </p>
     </div>
   );

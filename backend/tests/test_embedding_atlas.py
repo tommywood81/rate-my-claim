@@ -52,3 +52,4 @@ def test_build_atlas_projection_single_point_at_origin() -> None:
     assert out.points[0].x == 0.0
     assert out.points[0].y == 0.0
     assert out.points[0].z == 0.0
+    assert out.points[0].truth_label == "unclear"

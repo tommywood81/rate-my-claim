@@ -516,7 +516,7 @@ export function buildSubmitOutcomes(
 
       id: "evidence",
 
-      text: `${detail.evidence_count} source${detail.evidence_count === 1 ? "" : "s"} matched so far.`,
+      text: `${detail.evidence_count} source${detail.evidence_count === 1 ? "" : "s"} saved on record.`,
 
     });
 
@@ -538,7 +538,7 @@ export function buildSubmitOutcomes(
 
       id: "truth",
 
-      text: `Truth status: ${formatTruthLabel(detail.truth_label)} (from library sources on record).`,
+      text: `Truth status: ${formatTruthLabel(detail.truth_label)} (automated assessment).`,
 
     });
 
@@ -550,7 +550,10 @@ export function buildSubmitOutcomes(
 
   ) {
 
-    out.push({ id: "truth-unclear", text: "Truth status: inconclusive — not enough sources yet." });
+    out.push({
+      id: "truth-unclear",
+      text: "Truth status: inconclusive — contested or middling scores (edge case).",
+    });
 
   }
 

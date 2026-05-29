@@ -11,7 +11,7 @@ export function ClaimSearchHit({ claim, showScores = false }: ClaimSearchHitProp
   const scores = claim.scores;
   const meta: string[] = [];
   if (claim.visibility_label) meta.push(claim.visibility_label);
-  meta.push(`${claim.evidence_count} source${claim.evidence_count === 1 ? "" : "s"}`);
+  meta.push(`${claim.evidence_count} on record`);
   meta.push(`confidence ${claim.confidence_score.toFixed(2)}`);
 
   return (

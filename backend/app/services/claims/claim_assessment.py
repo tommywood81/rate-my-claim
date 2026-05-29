@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any, Literal
 
+from app.core.enrichment_pipeline_config import TruthResolutionConfig, get_enrichment_pipeline_config
+
 TruthLabel = Literal["supported", "refuted", "unclear"]
 
 _TRUTH_VALUES = frozenset({"supported", "refuted", "unclear"})
@@ -22,6 +24,37 @@ def _parse_json_payload(raw: str | dict[str, Any] | None) -> dict[str, Any]:
         return {}
 
 
+def _coerce_unit_float(value: Any, default: float = 0.0) -> float:
+    """Parse model score fields; tolerate categorical strings like low/medium/high."""
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return max(0.0, min(1.0, float(value)))
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if not text:
+            return default
+        qualitative = {
+            "none": 0.0,
+            "low": 0.25,
+            "weak": 0.25,
+            "poor": 0.2,
+            "medium": 0.5,
+            "moderate": 0.5,
+            "fair": 0.45,
+            "high": 0.75,
+            "strong": 0.8,
+            "good": 0.7,
+        }
+        if text in qualitative:
+            return qualitative[text]
+        try:
+            return max(0.0, min(1.0, float(text)))
+        except ValueError:
+            return default
+    return default
+
+
 def assessment_confidence_score(data: dict[str, Any]) -> float:
     """
     Public confidence = how sure we are of the assessment (truth_label), not P(claim is true).
@@ -29,7 +62,7 @@ def assessment_confidence_score(data: dict[str, Any]) -> float:
     Models often return truth_label refuted/supported with aggregate stuck at 0.5; align the
     displayed score when the verdict is definite but the numeric hedge remains at 0.5.
     """
-    aggregate = float(data.get("aggregate", 0) or 0)
+    aggregate = _coerce_unit_float(data.get("aggregate"), 0.0)
     label = str(data.get("truth_label", "")).strip().lower()
     if label in ("supported", "refuted") and aggregate <= 0.55:
         return 0.82
@@ -49,10 +82,11 @@ def scores_from_pending_analyses(analyses: list) -> tuple[float, float, float]:
             data = _parse_json_payload(row.structured_payload)
             scores_body = data.get("scores") if isinstance(data.get("scores"), dict) else data
             confidence = assessment_confidence_score(scores_body)
-            evidence_score = float(
-                scores_body.get("evidence_quality", evidence_score) or evidence_score
+            evidence_score = _coerce_unit_float(
+                scores_body.get("evidence_quality"),
+                evidence_score,
             )
-            hint = float(scores_body.get("controversy_hint", 0.0) or 0.0)
+            hint = _coerce_unit_float(scores_body.get("controversy_hint"), 0.0)
             if hint > controversy:
                 controversy = hint
 
@@ -105,13 +139,92 @@ def resolve_public_claim_scores(
     return pc, max(controversy, pco), max(evidence_score, pev)
 
 
+def _in_narrow_band(value: float, low: float, high: float) -> bool:
+    return low <= value <= high
+
+
+def is_inconclusive_edge_case(
+    *,
+    aggregate: float,
+    controversy: float,
+    model_label: str | None,
+    cfg: TruthResolutionConfig,
+) -> bool:
+    """
+    True only for genuinely contested middling assessments (~1% target).
+
+    Inconclusive when scores sit in a tight band, or controversy is high with middling aggregate.
+    Model 'unclear' outside these bands is resolved to supported/refuted via thresholds.
+    """
+    narrow = _in_narrow_band(
+        aggregate, cfg.inconclusive_aggregate_low, cfg.inconclusive_aggregate_high
+    )
+    contested = _in_narrow_band(
+        aggregate, cfg.contested_aggregate_low, cfg.contested_aggregate_high
+    )
+
+    if model_label == "unclear" and narrow:
+        return True
+
+    if (
+        controversy >= cfg.high_controversy_for_inconclusive
+        and contested
+        and model_label != "supported"
+        and model_label != "refuted"
+    ):
+        return True
+
+    if narrow and model_label not in ("supported", "refuted"):
+        return True
+
+    return False
+
+
+def resolve_truth_label_from_scores(
+    *,
+    aggregate: float,
+    controversy: float,
+    model_label: str | None,
+    cfg: TruthResolutionConfig | None = None,
+) -> TruthLabel:
+    """Map assessment scores to public supported / refuted / unclear."""
+    rules = cfg or get_enrichment_pipeline_config().truth
+    label = model_label if model_label in _TRUTH_VALUES else None
+
+    if is_inconclusive_edge_case(
+        aggregate=aggregate,
+        controversy=controversy,
+        model_label=label,
+        cfg=rules,
+    ):
+        return "unclear"
+
+    if label in ("supported", "refuted"):
+        return label  # type: ignore[return-value]
+
+    if label == "unclear":
+        if aggregate >= rules.supported_aggregate_min:
+            return "supported"
+        if aggregate <= rules.refuted_aggregate_max:
+            return "refuted"
+
+    if aggregate >= rules.supported_aggregate_min:
+        return "supported"
+    if aggregate <= rules.refuted_aggregate_max:
+        return "refuted"
+
+    return "unclear"
+
+
 def truth_label_from_analyses(
     analyses: list,
     *,
     processing_status: str | None,
     evidence_count: int | None = None,
+    truth_cfg: TruthResolutionConfig | None = None,
 ) -> TruthLabel | None:
     """Truth banner label once automated enrichment has produced a verdict."""
+    _ = evidence_count  # retained for API compatibility; corpus no longer gates truth
     if processing_status not in {
         "awaiting_moderation",
         "completed",
@@ -126,32 +239,26 @@ def truth_label_from_analyses(
     if not has_verdict:
         return None
 
-    label: str | None = None
-    aggregate = 0.0
+    model_label: str | None = None
+    aggregate = 0.5
+    controversy = 0.0
 
     for row in latest:
         if row.analysis_type == "confidence_analysis" and row.structured_payload:
             data = _parse_json_payload(row.structured_payload)
             scores_body = data.get("scores") if isinstance(data.get("scores"), dict) else data
-            aggregate = float(scores_body.get("aggregate", aggregate) or aggregate)
+            aggregate = _coerce_unit_float(scores_body.get("aggregate"), aggregate)
+            controversy = _coerce_unit_float(scores_body.get("controversy_hint"), controversy)
             raw = str(scores_body.get("truth_label", "")).strip().lower()
             if raw in _TRUTH_VALUES:
-                label = raw
+                model_label = raw
 
-    has_corpus = has_corpus_evidence_from_analyses(analyses)
-    if not has_corpus and evidence_count is not None and evidence_count > 0:
-        has_corpus = True
+    _, controversy_from_verdict, _ = scores_from_pending_analyses(latest)
+    controversy = max(controversy, controversy_from_verdict)
 
-    if label in _TRUTH_VALUES:
-        if not has_corpus and label in ("supported", "refuted"):
-            return "unclear"
-        return label  # type: ignore[return-value]
-
-    # Fallback when model omits truth_label (older rows).
-    if not has_corpus:
-        return "unclear"
-    if aggregate >= 0.62:
-        return "supported"
-    if aggregate <= 0.38:
-        return "refuted"
-    return "unclear"
+    return resolve_truth_label_from_scores(
+        aggregate=aggregate,
+        controversy=controversy,
+        model_label=model_label,
+        cfg=truth_cfg,
+    )

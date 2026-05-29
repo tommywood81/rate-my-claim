@@ -65,7 +65,7 @@ sequenceDiagram
 - **Provider registry** — OpenAI or Ollama (`AI_PROVIDER`).
 - **InstrumentedAIProvider** — Redis cache, retries, structured audit logs, Prometheus metrics (`rmc_ai_*`).
 - **Token budgets** — daily and per-scope caps in Redis (`OPENAI_*` env vars).
-- **Retrieval-first** — similar-claim evidence and optional URL fetch (`trafilatura`) before verdict JSON.
+- **Retrieval-first** — each claim’s **one enrichment run** searches the open web, fetches up to **three allowlisted reputable sources** (URL + excerpt + retrieval date saved on the claim), then runs the verdict. **Neighbor-claim evidence borrow is disabled.**
 - **Isolation** — canonical claims in `claims`; AI output in `ai_analysis` (non-canonical on the UI).
 
 ## Prerequisites
@@ -150,6 +150,28 @@ docker compose exec backend alembic current
 ```
 
 Integration tests verify a single Alembic head and DB revision (`tests/test_phase11_migrations.py`).
+
+## Enrichment and sources
+
+Public submit is **text only** (no user URLs). Each pending claim runs **one** Celery enrichment pass:
+
+1. Embed and canonicalize the claim text.
+2. **Source discovery** — web search → filter to **allowlisted reputable domains** (`backend/config/reputable_sources.yaml`) → fetch up to **3** pages → save **URL, excerpt, publisher credibility, and retrieval date** on the claim as Evidence.
+3. **Assessment** — reasoning model scores the claim using those excerpts (no neighbor-claim evidence borrow).
+4. **Finalize** — publish truth status, summary, and `evidence_count` (**sources on record**).
+
+Tune behavior in [`backend/config/enrichment_pipeline.yaml`](backend/config/enrichment_pipeline.yaml):
+
+| Section | Purpose |
+|---------|---------|
+| `sources.*` | Max sources, excerpt length, credibility floor, allowlist path |
+| `retrieval.borrow_from_similar_claims` | `false` by default (legacy neighbor borrow) |
+| `truth.*` | When public truth stays inconclusive vs supported/refuted |
+| `ai.*` | Combined assessment call, provisional verdict without corpus |
+
+Restart **backend** and **celery** after YAML edits. Browse cards show **`N on record`** (saved Evidence rows). Claim pages list clickable sources with excerpt and retrieval date.
+
+There are **no automatic re-runs**; moderators can reprocess a pending claim manually when needed.
 
 ## Environment variables
 

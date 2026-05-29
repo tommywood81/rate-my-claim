@@ -3,13 +3,18 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { AtlasColorMode } from "@/lib/claim-atlas-colors";
+import {
+  atlasPointColor,
+  formatTruthLabelDisplay,
+  TRUTH_ATLAS_LEGEND,
+  truthLabelToRgb,
+  type AtlasColorMode,
+} from "@/lib/claim-atlas-colors";
 import {
   ATLAS_STORAGE_THEME,
   getAtlasPalette,
   paintAtlasBackdrop,
   paintAtlasPoint,
-  scoreToThemeRgb,
   type AtlasVisualTheme,
 } from "@/lib/claim-atlas-theme";
 import type { ClaimAtlasData, ClaimAtlasPoint } from "@/lib/types";
@@ -42,12 +47,6 @@ function projectPoint(p: Vec3, width: number, height: number, zoom: number): Scr
     depth: p.z,
     radius: Math.max(3.5, 5.5 + scale * 0.022),
   };
-}
-
-function scoreForMode(point: ClaimAtlasPoint, mode: AtlasColorMode): number {
-  if (mode === "controversy") return point.controversy_score;
-  if (mode === "evidence") return point.evidence_score;
-  return point.confidence_score;
 }
 
 function readStoredTheme(): AtlasVisualTheme {
@@ -158,7 +157,7 @@ export function ClaimAtlasView() {
     projected.sort((a, b) => a.screen.depth - b.screen.depth);
 
     for (const { point, screen } of projected) {
-      const color = scoreToThemeRgb(colorMode, scoreForMode(point, colorMode), visualTheme);
+      const color = atlasPointColor(point, colorMode, visualTheme);
       const isHover = hovered?.id === point.id;
       const isSelected = selected?.id === point.id;
       const r = screen.radius * (isHover || isSelected ? 1.4 : 1);
@@ -378,6 +377,7 @@ export function ClaimAtlasView() {
       <div className="flex flex-wrap gap-2" role="group" aria-label="Color points by">
         {(
           [
+            ["truth", "Truth status"],
             ["confidence", "Confidence"],
             ["controversy", "Controversy"],
             ["evidence", "Evidence score"],
@@ -405,6 +405,25 @@ export function ClaimAtlasView() {
           </button>
         ))}
       </div>
+
+      {colorMode === "truth" && (
+        <div
+          className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm"
+          role="list"
+          aria-label="Truth status legend"
+        >
+          {TRUTH_ATLAS_LEGEND.map(({ key, label }) => (
+            <span key={key} className="inline-flex items-center gap-2" role="listitem">
+              <span
+                className="inline-block h-3 w-3 shrink-0 rounded-full border border-black/10"
+                style={{ background: truthLabelToRgb(key, visualTheme) }}
+                aria-hidden
+              />
+              {label}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div
         ref={containerRef}
@@ -451,8 +470,22 @@ export function ClaimAtlasView() {
             >
               <p className="font-medium">{focus.label}</p>
               <p className="mt-1 text-xs" style={{ color: palette.panelMuted }}>
-                Confidence {focus.confidence_score.toFixed(2)} · Controversy{" "}
-                {focus.controversy_score.toFixed(2)} · Evidence {focus.evidence_score.toFixed(2)}
+                {colorMode === "truth" ? (
+                  <>
+                    <span
+                      className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
+                      style={{ background: truthLabelToRgb(focus.truth_label, visualTheme) }}
+                      aria-hidden
+                    />
+                    {formatTruthLabelDisplay(focus.truth_label)}
+                  </>
+                ) : (
+                  <>
+                    Confidence {focus.confidence_score.toFixed(2)} · Controversy{" "}
+                    {focus.controversy_score.toFixed(2)} · Evidence{" "}
+                    {focus.evidence_score.toFixed(2)}
+                  </>
+                )}
               </p>
               {selected && (
                 <Link

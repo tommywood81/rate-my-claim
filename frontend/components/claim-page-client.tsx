@@ -255,8 +255,8 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
           <p className="text-sm text-[var(--muted)]">{totalEvidence} sources on record</p>
         </div>
         <p className="text-sm text-[var(--muted)]">
-          Sources, counterpoints, and contextual material drawn from the claim library (similar claims and archived
-          evidence).
+          Sources saved during automated assessment (URL, excerpt, and retrieval date). Up to three
+          reputable allowlisted pages per claim.
         </p>
         <div className="space-y-8">
           <EvidenceList title="Supporting" items={detail.evidence_supporting} variant="prominent" />
@@ -266,7 +266,7 @@ export function ClaimPageClient({ slug, initial, graph, timeline, justSubmitted 
             <p className="text-sm text-[var(--muted)]">
               {inActivePipeline
                 ? "Gathering sources…"
-                : "No sources matched yet."}
+                : "No sources saved on this claim yet."}
             </p>
           )}
         </div>

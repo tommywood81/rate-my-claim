@@ -6,6 +6,14 @@ type EvidenceListProps = {
   variant?: "default" | "prominent";
 };
 
+function formatHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 export function EvidenceList({ title, items, variant = "default" }: EvidenceListProps) {
   if (!items.length) return null;
 
@@ -21,16 +29,37 @@ export function EvidenceList({ title, items, variant = "default" }: EvidenceList
       <ul className="mt-3 space-y-3">
         {items.map((e) => (
           <li key={e.id} className={cardClass}>
-            <h4 className="font-medium leading-snug text-[var(--accent-dark)]">
-              {e.url ? (
-                <a href={e.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                  {e.title}
+            <h4 className="font-medium leading-snug text-[var(--accent-dark)]">{e.title}</h4>
+            {e.url && (
+              <p className="mt-1.5 text-xs leading-relaxed text-[var(--muted)] break-all">
+                <a
+                  href={e.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[var(--accent)] hover:underline"
+                  title={e.url}
+                >
+                  {e.url}
                 </a>
-              ) : (
-                e.title
-              )}
-            </h4>
-            {e.summary && <p className="mt-2 text-sm leading-relaxed text-[var(--fg)]">{e.summary}</p>}
+                <span className="mx-1.5 text-[var(--border)]" aria-hidden="true">
+                  ·
+                </span>
+                <a
+                  href={e.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-[var(--accent-dark)] hover:underline whitespace-nowrap"
+                >
+                  Open source ({formatHost(e.url)})
+                </a>
+              </p>
+            )}
+            {e.summary && (
+              <p className="mt-3 text-sm leading-relaxed text-[var(--fg)]">
+                <span className="sr-only">Saved excerpt: </span>
+                {e.summary}
+              </p>
+            )}
             <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--muted)]">
               {e.publisher && (
                 <div>
@@ -45,7 +74,7 @@ export function EvidenceList({ title, items, variant = "default" }: EvidenceList
               {e.retrieval_timestamp && (
                 <div>
                   <dt className="sr-only">Retrieved</dt>
-                  <dd>Retrieved {new Date(e.retrieval_timestamp).toLocaleString()}</dd>
+                  <dd>Saved {new Date(e.retrieval_timestamp).toLocaleString()}</dd>
                 </div>
               )}
             </dl>

@@ -156,6 +156,7 @@ export type ClaimAtlasPoint = {
   evidence_score: number;
   freshness_score: number;
   evidence_count: number;
+  truth_label: "supported" | "refuted" | "unclear";
   x: number;
   y: number;
   z: number;

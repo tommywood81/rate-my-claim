@@ -39,6 +39,7 @@ from app.services.claims.live_claim_sync import sync_pending_to_linked_claim
 from app.services.enrichment.assessment_runner import resolve_research_summary, run_assessment_stage
 
 from app.services.enrichment.context_builder import build_evidence_context, url_blocks_from_artifacts
+from app.services.enrichment.source_discovery import discover_reputable_sources, hits_to_url_blocks
 
 from app.services.evidence.ingestion_service import EvidenceIngestionService
 
@@ -70,13 +71,15 @@ _TERMINAL = frozenset(
 
 _EMPTY_DIGEST_PROMPT = (
 
-    "ARCHIVE EVIDENCE: no matching sources were retrieved from this database.\n"
+    "ARCHIVE EVIDENCE: no reputable web sources were retrieved for this claim.\n"
 
     "Assess the claim using well-established public knowledge (markets, science, units, etc.). "
 
     "Do not invent URLs or studies. Set evidence_quality between 0.1 and 0.35 to reflect "
 
-    "the empty archive, but still choose a definite truth_label when the facts are widely known."
+    "the empty source set. Choose supported or refuted when the facts are clear; use truth_label "
+
+    "unclear only when genuinely uncertain (target: rare edge cases)."
 
 )
 
@@ -86,11 +89,13 @@ def _provisional_verdict_from_scores(scores: dict[str, Any]) -> dict[str, Any]:
 
     controversy = float(scores.get("controversy_hint", 0.0) or 0.0)
 
+    label = str(scores.get("truth_label", "")).strip().lower()
+
     summary = (
 
-        f"Assessment (confidence {aggregate:.0%}): no library sources matched this claim yet. "
+        f"Assessment (confidence {aggregate:.0%}): no reputable web sources were retrieved. "
 
-        "Truth status stays inconclusive until evidence is on record."
+        f"Automated truth status: {label or 'pending'} from model scores."
 
     )
 
@@ -128,9 +133,9 @@ def _research_summary_from_scores(
 
     return (
 
-        "No matching evidence was found in the archive. "
+        "No reputable web sources were retrieved for this assessment. "
 
-        "A moderator can attach sources or re-run enrichment after more claims are indexed."
+        "A moderator can attach sources or re-run enrichment manually."
 
     )
 
@@ -284,18 +289,49 @@ async def _run_pipeline(pending_id: UUID) -> None:
 
             )
 
-            evidence_task = repo.evidence_for_similar_claims(
-                vec,
-                limit=retrieval_cfg.evidence_line_limit,
-                min_similarity=retrieval_cfg.min_similarity,
-                exclude_claim_id=pending.linked_claim_id,
-                similar_claim_limit=retrieval_cfg.similar_claim_search_limit,
-                max_similar_claims=retrieval_cfg.max_similar_claims,
+            source_cfg = pipeline.sources
+
+            reputable_task = discover_reputable_sources(
+
+                canonical,
+
+                cfg=source_cfg,
+
             )
 
-            artifacts, evidence_ctx = await asyncio.gather(crawl_task, evidence_task)
+            if pipeline.retrieval.borrow_from_similar_claims:
 
-            url_blocks = url_blocks_from_artifacts(
+                evidence_task = repo.evidence_for_similar_claims(
+
+                    vec,
+
+                    limit=retrieval_cfg.evidence_line_limit,
+
+                    min_similarity=retrieval_cfg.min_similarity,
+
+                    exclude_claim_id=pending.linked_claim_id,
+
+                    similar_claim_limit=retrieval_cfg.similar_claim_search_limit,
+
+                    max_similar_claims=retrieval_cfg.max_similar_claims,
+
+                )
+
+                artifacts, evidence_ctx, reputable_hits = await asyncio.gather(
+
+                    crawl_task, evidence_task, reputable_task
+
+                )
+
+            else:
+
+                artifacts, reputable_hits = await asyncio.gather(crawl_task, reputable_task)
+
+                evidence_ctx = []
+
+            reputable_blocks = hits_to_url_blocks(list(reputable_hits))
+
+            url_blocks = reputable_blocks + url_blocks_from_artifacts(
 
                 artifacts,
 
@@ -348,6 +384,8 @@ async def _run_pipeline(pending_id: UUID) -> None:
                     and ctx_bundle.line_map[k].get("evidence_id")
 
                 ],
+
+                reputable_source_urls=[str(b.get("url")) for b in reputable_blocks if b.get("url")],
 
                 assessment_run_at=run_at,
 
@@ -484,6 +522,8 @@ async def _run_pipeline(pending_id: UUID) -> None:
                     "duplicate_count": len(pending.duplicate_candidate_ids or []),
 
                     "url_blocks": len(url_blocks),
+
+                    "reputable_sources": len(reputable_blocks),
 
                     "pipeline": {
 
